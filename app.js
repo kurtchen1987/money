@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v22';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v23';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -1103,7 +1103,7 @@ async function doExport() {
   const file = new File([blob], name, { type: 'application/json' });
   const done = () => { D.lastExport = TODAY; save(); render(); };
   try {
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); done(); toast('選 Google Drive →「記帳備份」資料夾 → 儲存'); return; }
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); // 不帶標題，避免 Google Drive 多存一個 .txt done(); toast('選 Google Drive →「記帳備份」資料夾 → 儲存'); return; }
   } catch (e) { if (e.name === 'AbortError') return; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
   done(); toast('已下載備份檔');
