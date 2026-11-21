@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v21';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v22';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -343,7 +343,8 @@ V.home = () => {
   }
   if (!D.tx.some(t => t.kind === 'adjust' || t.opening)) h += `<div class="info">👋 第一次使用：先<a class="link" href="#set-bal">輸入各帳戶目前的餘額</a>，App 才算得出正確的錢</div>`;
   if (dow(TODAY) === +C.reconDay && D.recon.last !== TODAY) h += `<div class="info">🧾 今天是對帳日：數一下錢包、對一下各帳戶餘額・<a class="link" href="#acct">去對帳</a></div>`;
-  if (!D.lastExport || diff(D.lastExport, TODAY) >= 7) h += `<div class="note">💾 ${D.lastExport ? `上次備份是 ${md(D.lastExport)}` : '還沒備份過'}・<a class="link" data-act="export">現在匯出</a></div>`;
+  { const age = D.lastExport ? diff(D.lastExport, TODAY) : null;
+    h += `<button class="btn ${age === null || age >= 7 ? '' : 'ghost'}" data-act="export" style="margin-top:10px">☁️ 同步到小工具・備份 <span class="small" style="font-weight:400">（${age === null ? '還沒同步過' : age === 0 ? '今天同步過' : `${age} 天前同步`}）</span></button>`; }
   // 各帳戶餘額（LINE Bank 這類放罐子的帳戶顯示主帳戶＋分割帳戶的總額）
   const jt = sum(C.jars, j => jarBalances()[j.id] || 0);
   const bal = balances(), shown = C.accounts.filter(a => a.type !== 'cash');
@@ -1087,13 +1088,22 @@ document.addEventListener('change', e => {
 });
 
 // ---------- 匯出／匯入 ----------
+function exportSummary() {
+  const bal = balances(), jb = jarBalances();
+  return {
+    asOf: TODAY, savings: accName(C.savings),
+    accounts: C.accounts.filter(a => a.type !== 'card').map(a => ({ name: a.name, type: a.type, balance: Math.round(bal[a.id] || 0) })),
+    jars: C.jars.map(j => ({ name: j.name, emoji: j.emoji, balance: Math.round(jb[j.id] || 0), target: j.target || 0 })),
+    cards: C.cards.map(c => { const st = cardStatus(c); return { name: accName(c.id), bill: Math.round(st.paid ? 0 : st.bill), filled: st.filled, paid: st.paid, payDate: st.payDate, lastClose: st.lastClose, newSpend: Math.round(st.newSpend), alert: c.alert || 0, cycleStart: st.cy.start, cycleEnd: st.cy.end }; })
+  };
+}
 async function doExport() {
   const name = `money-backup-${TODAY}.json`;
-  const blob = new Blob([JSON.stringify({ app: 'money', version: 1, exportedAt: new Date().toISOString(), config: C, data: D }, null, 1)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ app: 'money', version: 1, exportedAt: new Date().toISOString(), summary: exportSummary(), config: C, data: D }, null, 1)], { type: 'application/json' });
   const file = new File([blob], name, { type: 'application/json' });
   const done = () => { D.lastExport = TODAY; save(); render(); };
   try {
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); done(); toast('已匯出，選「儲存到檔案」或 Google Drive'); return; }
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); done(); toast('選 Google Drive →「記帳備份」資料夾 → 儲存'); return; }
   } catch (e) { if (e.name === 'AbortError') return; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
   done(); toast('已下載備份檔');
