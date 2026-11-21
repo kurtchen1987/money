@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v26';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v27';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -300,7 +300,7 @@ function render() {
   applyTheme();
   route = (location.hash || '#home').slice(1) || 'home';
   const base = route.split('/')[0];
-  document.querySelectorAll('.tabs [data-tab]').forEach(a => a.classList.toggle('on', a.dataset.tab === (base.startsWith('set') || base === 'jars' || base === 'card' ? (base === 'jars' || base === 'card' ? 'home' : 'acct') : base)));
+  document.querySelectorAll('.tabs [data-tab]').forEach(a => a.classList.toggle('on', a.dataset.tab === (base === 'stash' ? '' : base.startsWith('set') || base === 'jars' || base === 'card' ? (base === 'jars' || base === 'card' ? 'home' : 'acct') : base)));
   const fn = V[base] || V.home;
   $('#view').innerHTML = fn(route.split('/').slice(1));
 }
@@ -316,7 +316,7 @@ function onboarding() {
 V.home = () => {
   const k = periodOf(TODAY), { start, end } = range(k), B = budget(k);
   const total = diff(start, end) + 1, left = diff(TODAY, end) + 1, passed = total - left;
-  let h = `<div class="row"><span class="muted">本期 ${mdw(start)} – ${mdw(end)}・還有 ${left} 天</span><a class="tag gray" href="#acct">${APP_VER}</a></div><h1>${MASCOT}錢錢管家</h1>`;
+  let h = `<div class="row"><span class="muted">本期 ${mdw(start)} – ${mdw(end)}・還有 ${left} 天</span><a class="tag gray" href="#acct">${APP_VER}</a></div><h1 id="secret-tap" style="touch-action:manipulation;-webkit-user-select:none;user-select:none">${MASCOT}錢錢管家</h1>`;
   if (B.salary == null) {
     h += `<div class="card hero"><div class="muted">這期薪水還沒輸入</div><div class="big" style="font-size:28px">輸入薪水後才算得出能花多少</div><button class="btn" style="background:#fff;color:var(--brand)" data-act="salary" data-k="${k}">輸入 ${+k.slice(5)} 月薪水</button></div>`;
   } else {
@@ -710,6 +710,48 @@ function ask(title, fields, okText = '確定') {
   });
 }
 
+// ---------- 私房錢（隱藏小帳本） ----------
+const STASH_KEY = 'money.stash';
+let ST = load(STASH_KEY) || { tx: [] };
+const saveStash = () => store(STASH_KEY, ST);
+let tapN = 0, tapT = 0;
+document.addEventListener('pointerdown', e => {
+  if (!e.target.closest('#secret-tap')) return;
+  const now = Date.now();
+  if (now - tapT > 5000) tapN = 0; // 停超過 5 秒就重來
+  tapT = now; tapN++;
+  if (tapN >= 1000) { tapN = 0; location.hash = '#stash'; }
+});
+V.stash = () => {
+  const list = [...ST.tx].sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
+  const bal = sum(ST.tx, t => t.amount);
+  const inc = sum(ST.tx.filter(t => t.amount > 0), t => t.amount), out = -sum(ST.tx.filter(t => t.amount < 0), t => t.amount);
+  return `<div class="stash"><div class="row"><a class="muted" href="#home">‹ 離開</a><b>🤫 私房錢</b><span style="width:40px"></span></div>
+  <div class="card hero" style="background:#3b2a5a"><div class="muted" style="color:#cbb8ee">目前餘額</div><div class="big" style="color:#fff;text-shadow:3px 3px 0 #8a5cd6">$ ${fmt(bal)}</div>
+  <div class="muted" style="color:#cbb8ee">累計收入 ${fmt(inc)}・累計支出 ${fmt(out)}</div></div>
+  <div class="row" style="margin-top:12px"><button class="btn" style="margin:0;background:#8a5cd6" data-act="stash-add" data-v="in">＋ 收入</button><button class="btn ghost" style="margin:0" data-act="stash-add" data-v="out">－ 支出</button></div>
+  <h2>明細（${list.length} 筆）・點一筆可以改</h2><div class="card tight">${list.length ? list.map(t => `<a class="txrow" data-act="stash-tx" data-id="${t.id}"><span class="emoji">${t.amount >= 0 ? '💰' : '💸'}</span><span class="grow"><div>${esc(t.note || (t.amount >= 0 ? '收入' : '支出'))}</div><div class="muted small">${md(t.date)}</div></span><span class="amt">${t.amount >= 0 ? '+' : '−'}${fmt(Math.abs(t.amount))}</span></a>`).join('') : '<div class="empty">還沒有紀錄</div>'}</div>
+  <h2>自己的備份</h2><div class="card small" style="line-height:1.7">這裡的資料<b>不會</b>進一般備份、Google Drive、試算表、Notion 或小工具。手機壞掉或刪掉 App 就救不回來，想保險就自己匯出一份存好。</div>
+  <div class="row" style="margin-top:10px"><button class="btn ghost" style="margin:0" data-act="stash-export">匯出私房錢</button><button class="btn ghost" style="margin:0" data-act="stash-import">匯入私房錢</button></div></div>`;
+};
+async function stashEdit(t, isIn) {
+  const r = await ask(t ? '修改' : isIn ? '💰 私房錢收入' : '💸 私房錢支出', [
+    { label: '金額', name: 'v', type: 'number', value: t ? Math.abs(t.amount) : '' },
+    { label: '日期', name: 'date', type: 'date', value: t ? t.date : TODAY },
+    { label: '備註', name: 'note', value: t ? t.note || '' : '' },
+    ...(t ? [{ label: '', name: 'del', html: `<label style="display:flex;gap:8px;align-items:center;color:var(--red)"><input type="checkbox" name="del" style="width:auto"> 刪除這筆</label>` }] : [])
+  ], '儲存');
+  if (!r) return;
+  if (t && r.del) { ST.tx = ST.tx.filter(x => x !== t); }
+  else {
+    const v = Math.abs(+r.v || 0); if (!v) return toast('請輸入金額');
+    const sign = t ? (t.amount >= 0 ? 1 : -1) : isIn ? 1 : -1;
+    if (t) Object.assign(t, { amount: sign * v, date: r.date || t.date, note: r.note.trim() });
+    else ST.tx.push({ id: uid(), date: r.date || TODAY, amount: sign * v, note: r.note.trim() });
+  }
+  saveStash(); render();
+}
+
 // ---------- 存錢罐達成獎勵 ----------
 function checkJarGoals() {
   const jb = jarBalances(), hit = [];
@@ -1007,6 +1049,18 @@ document.addEventListener('click', async e => {
       save(); location.hash = '#acct'; toast(n ? `已更新 ${n} 個帳戶` : '沒有變動'); checkJarGoals(); break;
     }
     case 'pk': statsKey = k; render(); break;
+    case 'stash-add': stashEdit(null, el.dataset.v === 'in'); break;
+    case 'stash-tx': stashEdit(ST.tx.find(x => x.id === el.dataset.id)); break;
+    case 'stash-export': {
+      const f = new File([JSON.stringify({ app: 'money-stash', exportedAt: new Date().toISOString(), tx: ST.tx })], `stash-${TODAY}.json`, { type: 'application/json' });
+      try { if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f] }); break; } } catch (err) { if (err.name === 'AbortError') break; }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); break;
+    }
+    case 'stash-import': {
+      const inp = document.createElement('input'); inp.type = 'file'; inp.style.display = 'none'; document.body.appendChild(inp);
+      inp.addEventListener('change', async () => { const f = inp.files[0]; inp.remove(); if (!f) return; try { const j = JSON.parse(await f.text()); if (j.app !== 'money-stash') throw new Error('不是私房錢的備份檔'); if (!confirm('匯入會取代目前的私房錢資料，確定嗎？')) return; ST = { tx: j.tx || [] }; saveStash(); render(); toast('匯入完成'); } catch (err) { alert('匯入失敗：' + err.message); } });
+      inp.click(); break;
+    }
     case 'bill-move': { const fk = el.dataset.from, tk = el.dataset.to; D.bills[tk] = D.bills[fk]; delete D.bills[fk]; save(); autopost(); render(); toast('已移到正確的帳單'); break; }
     case 'reward-close': el.closest('.reward').remove(); break;
     case 'reward-show': celebrate(C.jars.find(x => x.id === el.dataset.id)); break;
