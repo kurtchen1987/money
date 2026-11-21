@@ -175,3 +175,15 @@ body.adv .lvbar{border:2px solid #262626;height:10px;background:#3a3a3a}
 .badge b{display:block;margin-top:2px}
 .badge span{color:var(--sub);font-size:10px}
 body.adv .badge{border:2px solid #262626;box-shadow:2px 2px 0 #262626}
+
+/* 錢寶心情、花錢日曆、冒險報告 */
+.say{font-size:13px;color:var(--sub);margin:2px 0 4px}
+body.adv .say{background:#fffdf4;border:2px solid #262626;border-radius:8px;padding:4px 8px;display:inline-block;color:#262626}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:8px}
+.cal .cw{text-align:center;font-size:11px;color:var(--sub)}
+.cal .cd{aspect-ratio:1;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;line-height:1.1}
+.cal .cd b{font-weight:600}
+.cal .cd i{font-style:normal;font-size:9px}
+.cal .cd.today{outline:2px solid var(--blue)}
+.cal .cd.sel{outline:2px solid var(--ink)}
+.reward-box.report .rs .row{font-size:14px}

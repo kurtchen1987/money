@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v30';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v31';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -283,7 +283,7 @@ function forecast() {
 
 // 原創像素吉祥物「錢寶」（撲滿小怪），只在冒險主題顯示
 // 第 1 階段：小錢寶；第 2 階段（Lv.5）：戴金幣皇冠；第 3 階段（Lv.10）：金色錢寶＋皇冠＋閃光
-function mascotSvg(stage = 1, w = 42) {
+function mascotSvg(stage = 1, w = 42, mood = '') {
   const body = ['....KKKKKK....', '...KPPPPPPK...', '..KPPPPYYPPK..', '.KPPKPPPPKPPK.', 'KPPPKPPPPKPPPK', 'KPPPPPPPPPPPPK', 'KPPPPPNNPPPPPK', '.KPPPPPPPPPPK.', '..KPPPPPPPPK..', '...KKPKKPKK...', '...KK.KK.KK...'];
   const crown = ['....G.GG.G....', '....GGGGGG....', '....GGRGGG....'];
   const px = stage >= 2 ? [...crown, ...body] : body;
@@ -291,6 +291,11 @@ function mascotSvg(stage = 1, w = 42) {
   let r = '';
   px.forEach((row, y) => [...row].forEach((c, x) => { if (col[c]) r += `<rect x="${x}" y="${y}" width="1" height="1" fill="${col[c]}"/>`; }));
   if (stage >= 3) r += '<rect x="0" y="1" width="1" height="1" fill="#fff"/><rect x="13" y="4" width="1" height="1" fill="#fff"/><rect x="1" y="12" width="1" height="1" fill="#fff"/>';
+  // 心情：happy 臉紅、sweat 冒汗、cry 掉眼淚（畫在眼睛附近）
+  const oy = stage >= 2 ? 3 : 0, eye = (x, y, c) => `<rect x="${x}" y="${y + oy}" width="1" height="1" fill="${c}"/>`;
+  if (mood === 'happy') r += eye(2, 6, '#ff7a9a') + eye(11, 6, '#ff7a9a') + eye(13, 0, '#ffd84a') + eye(0, 2, '#ffd84a');
+  if (mood === 'sweat') r += eye(12, 1, '#7fd0ff') + eye(12, 2, '#7fd0ff') + eye(13, 3, '#7fd0ff');
+  if (mood === 'cry') r += eye(4, 5, '#4aa8ff') + eye(4, 6, '#4aa8ff') + eye(9, 5, '#4aa8ff') + eye(9, 6, '#4aa8ff') + eye(4, 7, '#4aa8ff') + eye(9, 7, '#4aa8ff');
   const h = Math.round(w * px.length / 14);
   return `<svg class="mascot" width="${w}" height="${h}" viewBox="0 0 14 ${px.length}" shape-rendering="crispEdges">${r}</svg>`;
 }
@@ -319,11 +324,21 @@ function onboarding() {
   <div class="card"><b>✏️ 從空白開始</b><p class="muted">自己在設定裡新增帳戶和項目</p><button class="btn ghost" data-act="blank">空白開始</button></div>`;
 }
 
+function moodOf(k) {
+  const B = budget(k); if (B.salary == null) return { mood: '', say: '' };
+  const { start, end } = range(k), total = diff(start, end) + 1, passed = Math.min(total, diff(start, TODAY) + 1);
+  const tp = passed / total * 100, sp = B.base > 0 ? (B.spent + B.saved) / B.base * 100 : 0;
+  if (B.remaining < 0) return { mood: 'cry', say: '嗚嗚…這期已經超支了，接下來省一點好不好 😭' };
+  if (sp > tp + 10) return { mood: 'sweat', say: `花得比時間快 ${Math.round(sp - tp)}%，我在冒汗了 💦` };
+  if (sp < tp - 5) return { mood: 'happy', say: '控制得超好！再這樣下去我要進化了 ✨' };
+  return { mood: '', say: '花得剛剛好，繼續保持～' };
+}
 V.home = () => {
   setTimeout(checkNewBadges, 300);
+  setTimeout(checkPeriodReport, 200);
   const k = periodOf(TODAY), { start, end } = range(k), B = budget(k);
   const total = diff(start, end) + 1, left = diff(TODAY, end) + 1, passed = total - left;
-  let h = `<div class="row"><span class="muted">本期 ${mdw(start)} – ${mdw(end)}・還有 ${left} 天</span><a class="tag gray" href="#acct">${APP_VER}</a></div><h1 id="secret-tap" style="touch-action:manipulation;-webkit-user-select:none;user-select:none">${mascotSvg(levelInfo().stage)}錢錢管家</h1>${levelLine()}`;
+  let h = `<div class="row"><span class="muted">本期 ${mdw(start)} – ${mdw(end)}・還有 ${left} 天</span><a class="tag gray" href="#acct">${APP_VER}</a></div><h1 id="secret-tap" style="touch-action:manipulation;-webkit-user-select:none;user-select:none">${mascotSvg(levelInfo().stage, 42, moodOf(k).mood)}錢錢管家</h1>${levelLine()}${moodOf(k).say ? `<div class="say">💬 錢寶：${moodOf(k).say}</div>` : ''}`;
   if (B.salary == null) {
     h += `<div class="card hero"><div class="muted">這期薪水還沒輸入</div><div class="big" style="font-size:28px">輸入薪水後才算得出能花多少</div><button class="btn" style="background:#fff;color:var(--brand)" data-act="salary" data-k="${k}">輸入 ${+k.slice(5)} 月薪水</button></div>`;
   } else {
@@ -460,6 +475,26 @@ function itemRow(it, bal) {
   return `<div class="item"><button class="box ${t ? 'on' : ''}" data-act="tick" data-key="${esc(it.key)}" ${amount == null && !t ? 'disabled style="opacity:.4"' : ''}>${t ? '✓' : ''}</button><span class="grow ${t ? 'done' : ''}">${esc(it.title)} ${kindTag}${extra}</span>${t ? `<a class="date" data-act="tx" data-id="${t.id}">${md(t.date)}</a>` : ''}<span class="amt ${t ? 'done' : ''}">${amtTxt}</span></div>`;
 }
 
+let calDay = '';
+function spendCalendar(k, B) {
+  const { start, end } = range(k), per = {};
+  for (const t of B.spentTx) if (!t.jar) per[t.date] = (per[t.date] || 0) + (+t.amount || 0);
+  const max = Math.max(1, ...Object.values(per));
+  const shade = v => v <= 0 ? 'var(--line)' : `rgba(200,70,61,${(0.18 + 0.82 * Math.min(1, v / max)).toFixed(2)})`;
+  let h = `<div class="card"><div class="row"><b>📅 花錢日曆</b><span class="muted small">顏色越深花越多・點一天看明細</span></div><div class="cal">${'一二三四五六日'.split('').map(w => `<span class="cw">${w}</span>`).join('')}`;
+  const lead = (dow(start) + 6) % 7;
+  for (let i = 0; i < lead; i++) h += '<span></span>';
+  const wk = [0, 0, 0, 0, 0, 0, 0], wn = [0, 0, 0, 0, 0, 0, 0];
+  for (let dd = start; dd <= end; dd = addDays(dd, 1)) {
+    const v = per[dd] || 0, future = dd > TODAY, w = (dow(dd) + 6) % 7;
+    if (!future) { wk[w] += v; wn[w]++; }
+    h += `<a class="cd${dd === TODAY ? ' today' : ''}${dd === calDay ? ' sel' : ''}" data-act="cal-day" data-d="${dd}" style="background:${future ? 'transparent' : shade(v)}${future ? ';opacity:.35' : ''}"><b>${+dd.slice(8)}</b>${v ? `<i>${v >= 1000 ? (v / 1000).toFixed(1) + 'k' : Math.round(v)}</i>` : ''}</a>`;
+  }
+  h += '</div>';
+  const avg = wk.map((v, i) => wn[i] ? v / wn[i] : 0), top = avg.indexOf(Math.max(...avg));
+  if (Math.max(...avg) > 0) h += `<div class="muted small" style="margin-top:8px">最會花的是<b>星期${'一二三四五六日'[top]}</b>，平均一天 ${fmt(avg[top])}；不算清單上的固定支出</div>`;
+  return h + '</div>';
+}
 V.stats = () => {
   const k = statsKey || periodOf(TODAY), { start, end } = range(k), B = budget(k), pk = nextMonth(k, -1), PB = budget(pk);
   const jarSpend = sum(B.spentTx.filter(t => t.jar), t => t.amount);
@@ -497,9 +532,11 @@ V.stats = () => {
     if (best && best[1] > 0) h += `<div class="card">💡 這期「${esc(best[0])}」比上期多 ${fmt(best[1])}。</div>`;
   }
   if (jarSpend) h += `<div class="card">🐷 從存錢罐拿出來花了 ${fmt(jarSpend)}，這部分不算在一般支出裡。</div>`;
+  if (range(k).end < TODAY && B.salary != null) h += `<button class="btn ghost" data-act="report" data-k="${k}">🗡️ 看這期的冒險報告</button>`;
+  h += spendCalendar(k, B);
   // 明細
-  const txs = D.tx.filter(t => periodOfTx(t) === k).sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
-  h += `<h2>本期明細（${txs.length} 筆）</h2><div class="card tight">${txs.length ? txs.map(txRow).join('') : '<div class="empty">還沒有記錄</div>'}</div>`;
+  const txs = D.tx.filter(t => periodOfTx(t) === k && (!calDay || t.date === calDay)).sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
+  h += `<h2>${calDay ? `${mdw(calDay)} 的明細（${txs.length} 筆）・<a class="link small" data-act="cal-day" data-d="">看全部</a>` : `本期明細（${txs.length} 筆）`}</h2><div class="card tight">${txs.length ? txs.map(txRow).join('') : '<div class="empty">還沒有記錄</div>'}</div>`;
   return h;
 };
 const catEmoji = c => (C.categories.find(x => x.name === c) || {}).emoji || SYS_CATS[c] || '📦';
@@ -895,6 +932,48 @@ V.subs = () => {
   return h;
 };
 
+// ---------- 月底冒險報告 ----------
+function periodReport(k) {
+  const B = budget(k), { start, end } = range(k);
+  const cats = {};
+  for (const t of B.spentTx) if (!t.jar) cats[t.category || '其他'] = (cats[t.category || '其他'] || 0) + (+t.amount || 0);
+  const mvp = Object.entries(cats).sort((a, b) => b[1] - a[1])[0];
+  const big = B.spentTx.filter(t => !t.jar).sort((a, b) => b.amount - a.amount)[0];
+  const badges = BADGES.filter(b => (D.badges || {})[b.id] && D.badges[b.id] >= start && D.badges[b.id] <= end);
+  const days = new Set(D.tx.filter(t => !t.ref && t.date >= start && t.date <= end && ['expense', 'income', 'transfer'].includes(t.kind)).map(t => t.date)).size;
+  return { k, start, end, B, mvp, big, badges, days, ok: B.remaining >= 0 };
+}
+function showReport(k) {
+  const R = periodReport(k), B = R.B;
+  const el = document.createElement('div');
+  el.className = 'reward';
+  el.innerHTML = `<div class="reward-box report">
+    <div class="lvl" style="font-size:22px">${R.ok ? 'QUEST CLEAR!' : 'GAME OVER…?'}</div>
+    <div class="muted small">${md(R.start)} – ${md(R.end)} 的冒險結算</div>
+    <div class="jump">${mascotSvg(levelInfo().stage, 84, R.ok ? 'happy' : 'cry')}</div>
+    <div class="rt" style="font-size:18px">${R.ok ? `守住荷包！還剩 ${fmt(B.remaining)}` : `超支 ${fmt(-B.remaining)}，下一期再挑戰！`}</div>
+    <div class="rs">
+      <div class="row"><span>💰 收入</span><b>${fmt(B.income)}</b></div>
+      <div class="row"><span>💸 自由花費</span><b>${fmt(B.spent)}</b></div>
+      <div class="row"><span>🐷 存進罐子</span><b>${fmt(B.saved)}</b></div>
+      <div class="row"><span>📈 投資</span><b>${fmt(B.invest)}</b></div>
+      ${R.mvp ? `<div class="row"><span>👑 本期 MVP</span><b>${esc(catEmoji(R.mvp[0]))} ${esc(R.mvp[0])} ${fmt(R.mvp[1])}</b></div>` : ''}
+      ${R.big ? `<div class="row"><span>🐉 最大魔王</span><b>${esc(R.big.note || R.big.category)} ${fmt(R.big.amount)}</b></div>` : ''}
+      <div class="row"><span>📝 有記帳的天數</span><b>${R.days} 天</b></div>
+    </div>
+    ${R.badges.length ? `<div class="rw">🏅 這期獲得：${R.badges.map(b => b.emoji + ' ' + b.name).join('、')}</div>` : ''}
+    <button class="btn" data-act="reward-close">繼續冒險 ▶</button></div>`;
+  document.body.appendChild(el);
+  jingle();
+}
+function checkPeriodReport() {
+  const pk = nextMonth(periodOf(TODAY), -1);
+  D.reportsSeen ||= {};
+  if (D.reportsSeen[pk] || range(pk).end < C.startDate || (D.periods[pk] || {}).salary == null) return;
+  D.reportsSeen[pk] = TODAY; save();
+  setTimeout(() => showReport(pk), 600);
+}
+
 // ---------- 存錢罐達成獎勵 ----------
 function checkJarGoals() {
   const jb = jarBalances(), hit = [];
@@ -1192,7 +1271,9 @@ document.addEventListener('click', async e => {
       D.recon.last = TODAY;
       save(); location.hash = '#acct'; toast(n ? `已更新 ${n} 個帳戶` : '沒有變動'); checkJarGoals(); break;
     }
-    case 'pk': statsKey = k; render(); break;
+    case 'pk': statsKey = k; calDay = ''; render(); break;
+    case 'report': showReport(k); break;
+    case 'cal-day': calDay = el.dataset.d === calDay ? '' : el.dataset.d; render(); break;
     case 'sub-add': {
       const t = D.tx.find(x => x.id === el.dataset.id); if (!t) break;
       C.subs ||= [];
