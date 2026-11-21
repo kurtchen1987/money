@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v24';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v25';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -1109,7 +1109,7 @@ async function doExport() {
   done(); toast('已下載備份檔');
 }
 function doImport() {
-  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json'; inp.style.display = 'none'; document.body.appendChild(inp);
+  const inp = document.createElement('input'); inp.type = 'file'; /* 不限制檔案類型：iPhone 有時會把 .json 判斷成別的類型而變灰色選不到 */ inp.style.display = 'none'; document.body.appendChild(inp);
   let fired = false;
   const onPick = async () => {
     if (fired) return; fired = true;
