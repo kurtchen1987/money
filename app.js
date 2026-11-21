@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v15';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v16';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -316,7 +316,7 @@ function onboarding() {
 V.home = () => {
   const k = periodOf(TODAY), { start, end } = range(k), B = budget(k);
   const total = diff(start, end) + 1, left = diff(TODAY, end) + 1, passed = total - left;
-  let h = `<div class="muted">本期 ${mdw(start)} – ${mdw(end)}・還有 ${left} 天</div><h1>${MASCOT}錢錢管家</h1>`;
+  let h = `<div class="row"><span class="muted">本期 ${mdw(start)} – ${mdw(end)}・還有 ${left} 天</span><a class="tag gray" href="#acct">${APP_VER}</a></div><h1>${MASCOT}錢錢管家</h1>`;
   if (B.salary == null) {
     h += `<div class="card hero"><div class="muted">這期薪水還沒輸入</div><div class="big" style="font-size:28px">輸入薪水後才算得出能花多少</div><button class="btn" style="background:#fff;color:var(--brand)" data-act="salary" data-k="${k}">輸入 ${+k.slice(5)} 月薪水</button></div>`;
   } else {
