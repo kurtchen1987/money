@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v25';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v26';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -874,11 +874,12 @@ function drawPaste() {
 // ---------- 交易編輯 ----------
 function openTx(id) {
   const t = D.tx.find(x => x.id === id); if (!t) return;
+  const op = t.kind === 'jar' && t.amount > 0 && !t.link ? `<div class="field"><label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="opening" style="width:auto" ${t.opening ? 'checked' : ''}> 這是原本就在罐子裡的錢（不算這期新存的）</label></div>` : '';
   const nc = t.kind === 'expense' && acc(t.from).type === 'card' ? `<div class="field"><label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="nextCycle" style="width:auto" ${t.nextCycle || t.post ? 'checked' : ''}> ⏭️ 算下一期帳單（店家還沒請款）</label></div>` : '';
   const catSel = t.kind === 'expense' ? `<div class="field"><label>類別</label><select name="category">${[...C.categories.map(c => c.name), ...Object.keys(SYS_CATS)].filter((v, i, a) => a.indexOf(v) === i).map(c => `<option ${c === t.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>` : '';
   sheet(`<div class="head"><a class="muted" data-act="close">取消</a><b>${esc(KINDS[t.kind] || (t.kind === 'jar' ? '存錢罐' : '對帳調整'))}</b><a class="link" data-act="tx-save">儲存</a></div>
   <form id="txf"><div class="field"><label>金額</label><input name="amount" type="number" inputmode="numeric" value="${Math.abs(t.amount)}"></div>
-  <div class="field"><label>日期</label><input name="date" type="date" value="${t.date}"></div>${nc}${catSel}
+  <div class="field"><label>日期</label><input name="date" type="date" value="${t.date}"></div>${op}${nc}${catSel}
   <div class="field"><label>備註</label><input name="note" value="${esc(t.note || '')}"></div></form>
   ${t.ref ? '<p class="muted small" style="margin-top:8px">這筆來自清單，刪除等於取消打勾</p>' : ''}<button class="btn danger" data-act="tx-del">刪除這筆</button>`);
   modalCtx = { tx: t };
@@ -968,6 +969,7 @@ document.addEventListener('click', async e => {
     case 'tx-save': {
       const t = modalCtx.tx, f = $('#txf'), v = +f.elements.amount.value;
       t.amount = t.kind === 'jar' || t.kind === 'adjust' ? (t.amount < 0 ? -v : v) : v; t.date = f.elements.date.value || t.date; t.note = f.elements.note.value; t.edited = true;
+      if (f.elements.opening) { if (f.elements.opening.checked) t.opening = true; else delete t.opening; }
       if (f.elements.nextCycle) { if (f.elements.nextCycle.checked) { if (!t.post) t.nextCycle = true; } else { delete t.nextCycle; delete t.post; } }
       if (f.elements.category) t.category = f.elements.category.value;
       const linked = D.tx.find(x => x.link === t.id); if (linked) { linked.amount = -v; linked.date = t.date; }
