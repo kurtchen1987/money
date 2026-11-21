@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v18';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v19';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -332,6 +332,8 @@ V.home = () => {
   const nk = nextMonth(k);
   if (TODAY >= dateIn(TODAY.slice(0, 7), C.salary.remindDay) && periodOf(TODAY) !== TODAY.slice(0, 7) && (D.periods[TODAY.slice(0, 7)] || {}).salary == null)
     h += `<div class="note">💰 ${+TODAY.slice(5, 7)} 月薪水快入帳了（${mdw(payday(TODAY.slice(0, 7)))}）・<a class="link" data-act="salary" data-k="${TODAY.slice(0, 7)}">先輸入金額</a></div>`;
+  const oldInst = D.tx.filter(t => isOldInst(t) && !t.edited && acc(t.from).type === 'card');
+  if (oldInst.length) h += `<div class="note">📅 有 ${oldInst.length} 筆分期的日期是當初刷卡日（例如 ${md(oldInst[0].date)}），算到很久以前的帳單去了・<a class="link" href="#card/${oldInst[0].from}/0">去修正</a></div>`;
   const hasBal = D.tx.some(t => t.kind === 'adjust' || t.opening);
   if (hasBal) for (const w of forecast())
     h += `<div class="warn">⚠️ ${esc(accName(w.acc))} ${md(w.date)} 要扣 ${fmt(w.total)}（${esc(w.titles.join('、'))}），餘額不足 ${fmt(w.short)}</div>`;
@@ -584,7 +586,12 @@ V.card = ([id, off]) => {
     h += `<div class="row" style="margin-top:8px"><span>銀行帳單</span><a class="link" data-act="bill" data-key="${esc(cc.key)}" data-spend="${cc.total}">${bill == null ? '填金額 ›' : fmt(bill) + ' ›'}</a></div>`;
     if (bill != null && bill !== cc.total) h += `<div class="note">帳單比 App 記到的${bill > cc.total ? '多' : '少'} ${fmt(Math.abs(bill - cc.total))}，可能有漏記、多記，或該勾「下一期」的沒勾</div>`;
   }
-  h += `</div><h2>明細（${cc.txs.length} 筆）・點一筆就能改</h2><div class="card tight">${cc.txs.length ? cc.txs.map(txRow).join('') : '<div class="empty">這期沒有刷卡紀錄</div>'}</div>
+  const insts = D.tx.filter(t => t.kind === 'expense' && t.from === id && instNo(t.note)).sort((a, b) => a.date < b.date ? 1 : -1);
+  if (insts.length) {
+    const lc = cardStatus(card).lastClose;
+    h += `</div><h2>📌 分期款（全部期別）</h2><div class="card tight">${insts.map(t => `<div class="item"><span class="grow"><a data-act="tx" data-id="${t.id}">${esc(t.note)}</a><br><span class="muted small">${md(t.date)}・${fmt(t.amount)}${isOldInst(t) && !t.edited ? ' <span class="tag amber">日期可能是原始刷卡日</span>' : ''}</span></span>${isOldInst(t) && !t.edited ? `<span style="display:flex;flex-direction:column;gap:4px"><a class="btn sm" data-act="inst-date" data-id="${t.id}" data-v="${TODAY}">改到這期</a><a class="btn ghost sm" data-act="inst-date" data-id="${t.id}" data-v="${lc}">改到上期 ${md(lc)}</a></span>` : ''}</div>`).join('')}`;
+  }
+  h += `${insts.length ? '' : '</div>'}<div style="height:0"></div>${insts.length ? '</div>' : ''}<h2>明細（${cc.txs.length} 筆）・點一筆就能改</h2><div class="card tight">${cc.txs.length ? cc.txs.map(txRow).join('') : '<div class="empty">這期沒有刷卡紀錄</div>'}</div>
   <button class="btn" data-act="add-card" data-id="${id}">＋ 補記一筆 ${esc(accName(id))}</button>`;
   return h;
 };
@@ -817,6 +824,7 @@ function instNo(note) {
   m = n.match(/第\s*(\d{1,2})\s*期/);
   return m ? String(+m[1]) : (/分期/.test(n) ? '?' : null);
 }
+const isOldInst = t => !!instNo(t.note) && t.kind === 'expense' && diff(t.date, (t.created || '').slice(0, 10) || TODAY) > 45;
 const sameInst = (a, b) => { const x = instNo(a), y = instNo(b); if (x === '?' || y === '?') return false; return x === y; };
 function parsePaste(text) {
   const rows = [];
@@ -828,6 +836,7 @@ function parsePaste(text) {
     const cat = f[3] && (C.categories.some(c => c.name === f[3]) || SYS_CATS[f[3]]) ? f[3] : '其他';
     const r = { raw: line, date, from: a ? a.id : '', amount, category: cat, note: f[4] || '', nextCycle: /下一期/.test(f[5] || '') && !!a && nextOk(cardOf(a.id), date || TODAY), on: true, err: '' };
     if (!date) r.err = '日期看不懂'; else if (!a) r.err = `找不到帳戶「${f[1] || ''}」`; else if (!amount) r.err = '金額看不懂';
+    if (!r.err && instNo(r.note) && diff(r.date, TODAY) > 45) { r.origDate = r.date; r.date = TODAY; }
     if (r.err) r.on = false;
     else r.dup = D.tx.some(t => t.kind === 'expense' && t.from === r.from && t.date === r.date && Math.abs(+t.amount) === Math.abs(r.amount) && sameInst(t.note, r.note));
     // 同一次貼上的資料裡也檢查：多張截圖重疊時，同日期＋同帳戶＋同金額＋同店家只留第一筆
@@ -849,7 +858,7 @@ function drawPaste() {
     PI.rows.forEach((r, i) => {
       h += `<div class="item" style="align-items:flex-start"><input type="checkbox" style="width:auto;margin-top:4px" data-pi="${i}" data-pf="on" ${r.on ? 'checked' : ''} ${r.err ? 'disabled' : ''}>
       <div class="grow">${r.err ? `<div class="muted small">${esc(r.raw)}</div><span class="tag red">${esc(r.err)}</span>` : `
-        <div class="row"><span><input type="date" value="${r.date}" data-pi="${i}" data-pf="date" style="width:auto;padding:3px 6px;font-size:13px"> ${esc(accName(r.from))}</span><b>${r.amount < 0 ? '退款 ' : ''}${fmt(Math.abs(r.amount))}</b></div>${diff(r.date, TODAY) > 45 ? `<div class="small" style="color:var(--amber)">⚠️ 這是 ${diff(r.date, TODAY)} 天前的日期，會算進很久以前的帳單；分期請改成這期的入帳日</div>` : ''}
+        <div class="row"><span><input type="date" value="${r.date}" data-pi="${i}" data-pf="date" style="width:auto;padding:3px 6px;font-size:13px"> ${esc(accName(r.from))}</span><b>${r.amount < 0 ? '退款 ' : ''}${fmt(Math.abs(r.amount))}</b></div>${r.origDate ? `<div class="small" style="color:var(--blue)">📅 分期：截圖上的 ${md(r.origDate)} 是當初刷卡日，已改成今天（算這期新刷）・${(() => { const c = cardOf(r.from); return c ? `<a class="link" data-act="pi-date" data-i="${i}" data-v="${cardStatus(c).lastClose}">改到上期帳單（${md(cardStatus(c).lastClose)}）</a>・` : ''; })()}<a class="link" data-act="pi-date" data-i="${i}" data-v="${r.origDate}">用原始日期</a></div>` : ''}${!r.origDate && diff(r.date, TODAY) > 45 ? `<div class="small" style="color:var(--amber)">⚠️ 這是 ${diff(r.date, TODAY)} 天前的日期，會算進很久以前的帳單</div>` : ''}
         <div class="muted small">${esc(r.note)}${r.dup === 'batch' ? ' <span class="tag amber">跟上面重複（截圖重疊）</span>' : r.dup ? ' <span class="tag amber">已經記過</span>' : ''}</div>
         <div class="row" style="margin-top:6px;gap:6px"><select data-pi="${i}" data-pf="category" style="padding:6px 8px;font-size:13px">${C.categories.map(c => `<option ${c.name === r.category ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}${C.categories.some(c => c.name === r.category) ? '' : `<option selected>${esc(r.category)}</option>`}</select>
         ${acc(r.from).type === 'card' ? `<label class="small" style="display:flex;gap:4px;align-items:center;white-space:nowrap"><input type="checkbox" style="width:auto" data-pi="${i}" data-pf="nextCycle" ${r.nextCycle ? 'checked' : ''}>⏭️ 下一期</label>` : ''}</div>`}
@@ -882,6 +891,7 @@ document.addEventListener('click', async e => {
     case 'close': if (modalCtx && modalCtx.ask) modalCtx.ask(null); closeSheet(); break;
     case 'add': openAdd(); break;
     case 'add-card': openAdd({ from: el.dataset.id }); break;
+    case 'inst-date': { const t = D.tx.find(x => x.id === el.dataset.id); if (t) { t.origDate = t.date; t.date = el.dataset.v; t.edited = true; save(); render(); toast(`已改到 ${md(t.date)}`); } break; }
     case 'ae-mode': {
       AE.mode = el.dataset.v;
       if (AE.mode === 'withdraw' || AE.mode === 'transfer') { if (acc(AE.from).type !== 'bank') AE.from = (C.accounts.find(a => a.type === 'bank') || {}).id; }
@@ -903,6 +913,7 @@ document.addEventListener('click', async e => {
     case 'paste-clip': try { PI.text = await navigator.clipboard.readText(); drawPaste(); } catch (err) { toast('讀不到剪貼簿，請長按輸入框貼上'); } break;
     case 'paste-parse': PI.text = $('#pastebox').value; PI.rows = parsePaste(PI.text); if (!PI.rows.length) { PI.rows = null; toast('沒有讀到資料'); } drawPaste(); break;
     case 'paste-back': PI.rows = null; drawPaste(); break;
+    case 'pi-date': { const r = PI.rows[+el.dataset.i]; r.date = el.dataset.v; if (r.date === r.origDate) delete r.origDate; drawPaste(); break; }
     case 'paste-go': {
       const ok = PI.rows.filter(r => r.on && !r.err);
       for (const r of ok) { const t = { id: uid(), date: r.date, kind: 'expense', from: r.from, amount: r.amount, category: r.category, note: r.note, created: new Date().toISOString(), imported: true }; if (r.nextCycle && acc(r.from).type === 'card') t.nextCycle = true; D.tx.push(t); }
