@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="錢錢管家">
+<meta name="theme-color" content="#2f6f5e">
+<title>錢錢管家</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="view"></main>
+<nav class="tabs" id="tabs">
+  <a href="#home" data-tab="home"><span class="ic">🏠</span>首頁</a>
+  <a href="#list" data-tab="list"><span class="ic">☑️</span>清單</a>
+  <button class="plus" data-act="add" aria-label="記一筆"><span class="ic">＋</span></button>
+  <a href="#stats" data-tab="stats"><span class="ic">📊</span>分析</a>
+  <a href="#acct" data-tab="acct"><span class="ic">🏦</span>帳戶</a>
+</nav>
+<div id="modal" class="modal" hidden></div>
+<div id="toast" class="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
