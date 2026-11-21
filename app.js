@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v19';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v20';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -200,7 +200,7 @@ function autopost() {
 function nextCloseAfter(card, date) { let c = dateIn(date.slice(0, 7), +card.closeDay); if (c < date) c = dateIn(nextMonth(date.slice(0, 7)), +card.closeDay); return c; }
 const NEXT_WINDOW = 10; // 結帳日前幾天內刷的才可能被延到下一期
 function nextOk(card, date) { return !!card && diff(date, nextCloseAfter(card, date)) <= NEXT_WINDOW; }
-function postDate(t) { if (!t.nextCycle) return t.date; const card = cardOf(t.from); return nextOk(card, t.date) ? addDays(nextCloseAfter(card, t.date), 1) : t.date; }
+function postDate(t) { if (t.post) return t.post; if (!t.nextCycle) return t.date; const card = cardOf(t.from); return nextOk(card, t.date) ? addDays(nextCloseAfter(card, t.date), 1) : t.date; }
 
 function cycle(card, ref = TODAY) {
   let close = dateIn(ref.slice(0, 7), +card.closeDay);
@@ -497,7 +497,7 @@ function txRow(t) {
   const sign = t.kind === 'income' ? '+' : t.kind === 'expense' || t.kind === 'invest' ? '−' : '';
   const em = t.kind === 'transfer' ? '🔁' : t.kind === 'jar' ? '🐷' : t.kind === 'adjust' ? '🧾' : catEmoji(t.category);
   const desc = t.kind === 'transfer' ? `${accName(t.from)} → ${accName(t.to)}` : t.kind === 'jar' ? `${(C.jars.find(j => j.id === t.jar) || {}).name || '罐子'} ${t.amount >= 0 ? '存入' : '拿出'}` : t.kind === 'adjust' ? `${accName(t.to)} 對帳調整` : (t.kind === 'income' ? accName(t.to) : accName(t.from));
-  return `<a class="txrow" data-act="tx" data-id="${t.id}"><span class="emoji">${em}</span><span class="grow"><div>${esc(t.note || t.category || KINDS[t.kind] || '')}</div><div class="muted small">${md(t.date)}・${esc(desc)}${t.nextCycle ? '・⏭️ 下一期' : ''}</div></span><span class="amt">${sign}${fmt(Math.abs(t.amount))}</span></a>`;
+  return `<a class="txrow" data-act="tx" data-id="${t.id}"><span class="emoji">${em}</span><span class="grow"><div>${esc(t.note || t.category || KINDS[t.kind] || '')}</div><div class="muted small">${md(t.date)}・${esc(desc)}${t.nextCycle || t.post ? '・⏭️ 下一期' : ''}</div></span><span class="amt">${sign}${fmt(Math.abs(t.amount))}</span></a>`;
 }
 
 V.acct = () => {
@@ -834,7 +834,7 @@ function parsePaste(text) {
     const f = line.split(/\t|,|，/).map(x => x.trim());
     const date = parseDate(f[0]), a = findAcc(f[1]), amount = +String(f[2] || '').replace(/[^\d.\-]/g, '');
     const cat = f[3] && (C.categories.some(c => c.name === f[3]) || SYS_CATS[f[3]]) ? f[3] : '其他';
-    const r = { raw: line, date, from: a ? a.id : '', amount, category: cat, note: f[4] || '', nextCycle: /下一期/.test(f[5] || '') && !!a && nextOk(cardOf(a.id), date || TODAY), on: true, err: '' };
+    const r = { raw: line, date, from: a ? a.id : '', amount, category: cat, note: f[4] || '', nextCycle: /下一期/.test(f[5] || '') && !!a && !!cardOf(a.id) && (date || TODAY) < cycle(cardOf(a.id)).start, on: true, err: '' };
     if (!date) r.err = '日期看不懂'; else if (!a) r.err = `找不到帳戶「${f[1] || ''}」`; else if (!amount) r.err = '金額看不懂';
     if (!r.err && instNo(r.note) && diff(r.date, TODAY) > 45) { r.origDate = r.date; r.date = TODAY; }
     if (r.err) r.on = false;
@@ -872,7 +872,7 @@ function drawPaste() {
 // ---------- 交易編輯 ----------
 function openTx(id) {
   const t = D.tx.find(x => x.id === id); if (!t) return;
-  const nc = t.kind === 'expense' && acc(t.from).type === 'card' ? `<div class="field"><label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="nextCycle" style="width:auto" ${t.nextCycle ? 'checked' : ''}> ⏭️ 算下一期帳單（店家還沒請款）</label></div>` : '';
+  const nc = t.kind === 'expense' && acc(t.from).type === 'card' ? `<div class="field"><label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="nextCycle" style="width:auto" ${t.nextCycle || t.post ? 'checked' : ''}> ⏭️ 算下一期帳單（店家還沒請款）</label></div>` : '';
   const catSel = t.kind === 'expense' ? `<div class="field"><label>類別</label><select name="category">${[...C.categories.map(c => c.name), ...Object.keys(SYS_CATS)].filter((v, i, a) => a.indexOf(v) === i).map(c => `<option ${c === t.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>` : '';
   sheet(`<div class="head"><a class="muted" data-act="close">取消</a><b>${esc(KINDS[t.kind] || (t.kind === 'jar' ? '存錢罐' : '對帳調整'))}</b><a class="link" data-act="tx-save">儲存</a></div>
   <form id="txf"><div class="field"><label>金額</label><input name="amount" type="number" inputmode="numeric" value="${Math.abs(t.amount)}"></div>
@@ -916,7 +916,12 @@ document.addEventListener('click', async e => {
     case 'pi-date': { const r = PI.rows[+el.dataset.i]; r.date = el.dataset.v; if (r.date === r.origDate) delete r.origDate; drawPaste(); break; }
     case 'paste-go': {
       const ok = PI.rows.filter(r => r.on && !r.err);
-      for (const r of ok) { const t = { id: uid(), date: r.date, kind: 'expense', from: r.from, amount: r.amount, category: r.category, note: r.note, created: new Date().toISOString(), imported: true }; if (r.nextCycle && acc(r.from).type === 'card') t.nextCycle = true; D.tx.push(t); }
+      for (const r of ok) {
+        const t = { id: uid(), date: r.date, kind: 'expense', from: r.from, amount: r.amount, category: r.category, note: r.note, created: new Date().toISOString(), imported: true };
+        const card = cardOf(r.from);
+        if (r.nextCycle && card) { const cs = cycle(card).start; if (r.date < cs) t.post = cs; else t.nextCycle = true; }
+        D.tx.push(t);
+      }
       save(); closeSheet(); render(); toast(`已匯入 ${ok.length} 筆・到「分析 → 明細」或首頁點信用卡查看`); break;
     }
     case 'salary': {
@@ -961,7 +966,7 @@ document.addEventListener('click', async e => {
     case 'tx-save': {
       const t = modalCtx.tx, f = $('#txf'), v = +f.elements.amount.value;
       t.amount = t.kind === 'jar' || t.kind === 'adjust' ? (t.amount < 0 ? -v : v) : v; t.date = f.elements.date.value || t.date; t.note = f.elements.note.value; t.edited = true;
-      if (f.elements.nextCycle) { if (f.elements.nextCycle.checked) t.nextCycle = true; else delete t.nextCycle; }
+      if (f.elements.nextCycle) { if (f.elements.nextCycle.checked) { if (!t.post) t.nextCycle = true; } else { delete t.nextCycle; delete t.post; } }
       if (f.elements.category) t.category = f.elements.category.value;
       const linked = D.tx.find(x => x.link === t.id); if (linked) { linked.amount = -v; linked.date = t.date; }
       save(); closeSheet(); render(); break;
