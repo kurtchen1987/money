@@ -196,11 +196,15 @@ function autopost() {
   if (n) save();
 }
 
+// 刷卡算哪一期：勾了「算下一期」就用下一次結帳的隔天當入帳日
+function nextCloseAfter(card, date) { let c = dateIn(date.slice(0, 7), +card.closeDay); if (c < date) c = dateIn(nextMonth(date.slice(0, 7)), +card.closeDay); return c; }
+function postDate(t) { if (!t.nextCycle) return t.date; const card = cardOf(t.from); return card ? addDays(nextCloseAfter(card, t.date), 1) : t.date; }
+
 function cycle(card, ref = TODAY) {
   let close = dateIn(ref.slice(0, 7), +card.closeDay);
   if (close < ref) close = dateIn(nextMonth(ref.slice(0, 7)), +card.closeDay);
   const prev = dateIn(nextMonth(close.slice(0, 7), -1), +card.closeDay), start = addDays(prev, 1);
-  const spend = sum(D.tx.filter(t => t.kind === 'expense' && t.from === card.id && t.date >= start && t.date <= close), t => t.amount);
+  const spend = sum(D.tx.filter(t => t.kind === 'expense' && t.from === card.id && postDate(t) >= start && postDate(t) <= close), t => t.amount);
   return { start, end: close, spend };
 }
 
@@ -208,7 +212,7 @@ function cycle(card, ref = TODAY) {
 function cardStatus(card) {
   const cy = cycle(card), lastClose = addDays(cy.start, -1), key = `${card.id}|${lastClose.slice(0, 7)}`;
   const prevStart = addDays(dateIn(nextMonth(lastClose.slice(0, 7), -1), +card.closeDay), 1);
-  const est = sum(D.tx.filter(t => t.kind === 'expense' && t.from === card.id && t.date >= prevStart && t.date <= lastClose), t => t.amount);
+  const est = sum(D.tx.filter(t => t.kind === 'expense' && t.from === card.id && postDate(t) >= prevStart && postDate(t) <= lastClose), t => t.amount);
   let payItem = null;
   const k = periodOf(TODAY);
   for (const kk of [nextMonth(k, -1), k, nextMonth(k)]) { const it = plan(kk).find(i => i.cardPay && i.to === card.id && i.billKey === key); if (it) { payItem = it; break; } }
@@ -404,7 +408,7 @@ function itemRow(it, bal) {
     return `<div class="item"><span class="tag ${it.amount == null ? 'amber' : ''}">${it.amount == null ? '待填' : it.done ? '已入帳' : '已輸入'}</span><span class="grow">薪水 → ${esc(accName(it.to))}</span><a class="amt link" data-act="salary" data-k="${it.key.split('|')[0]}">${it.amount == null ? '輸入 ›' : fmt(it.amount)}</a></div>`;
   }
   if (it.kind === 'bill') {
-    const v = D.bills[it.billKey], card = cardOf(it.card), spend = card ? sum(D.tx.filter(x => x.kind === 'expense' && x.from === card.id && x.date > dateIn(nextMonth(it.close.slice(0, 7), -1), +card.closeDay) && x.date <= it.close), x => x.amount) : 0;
+    const v = D.bills[it.billKey], card = cardOf(it.card), spend = card ? sum(D.tx.filter(x => x.kind === 'expense' && x.from === card.id && postDate(x) > dateIn(nextMonth(it.close.slice(0, 7), -1), +card.closeDay) && postDate(x) <= it.close), x => x.amount) : 0;
     return `<div class="item"><span class="tag ${v == null ? 'amber' : ''}">${v == null ? '待填' : '已填'}</span><span class="grow">${esc(it.title)} <span class="muted">${md(it.close)} 結帳・App 記到 ${fmt(spend)}</span></span><a class="amt link" data-act="bill" data-key="${esc(it.billKey)}" data-spend="${spend}">${v == null ? '填金額 ›' : fmt(v)}</a></div>`;
   }
   let amount = it.amount;
@@ -465,7 +469,7 @@ function txRow(t) {
   const sign = t.kind === 'income' ? '+' : t.kind === 'expense' || t.kind === 'invest' ? '−' : '';
   const em = t.kind === 'transfer' ? '🔁' : t.kind === 'jar' ? '🐷' : t.kind === 'adjust' ? '🧾' : catEmoji(t.category);
   const desc = t.kind === 'transfer' ? `${accName(t.from)} → ${accName(t.to)}` : t.kind === 'jar' ? `${(C.jars.find(j => j.id === t.jar) || {}).name || '罐子'} ${t.amount >= 0 ? '存入' : '拿出'}` : t.kind === 'adjust' ? `${accName(t.to)} 對帳調整` : (t.kind === 'income' ? accName(t.to) : accName(t.from));
-  return `<a class="txrow" data-act="tx" data-id="${t.id}"><span class="emoji">${em}</span><span class="grow"><div>${esc(t.note || t.category || KINDS[t.kind] || '')}</div><div class="muted small">${md(t.date)}・${esc(desc)}</div></span><span class="amt">${sign}${fmt(Math.abs(t.amount))}</span></a>`;
+  return `<a class="txrow" data-act="tx" data-id="${t.id}"><span class="emoji">${em}</span><span class="grow"><div>${esc(t.note || t.category || KINDS[t.kind] || '')}</div><div class="muted small">${md(t.date)}・${esc(desc)}${t.nextCycle ? '・⏭️ 下一期' : ''}</div></span><span class="amt">${sign}${fmt(Math.abs(t.amount))}</span></a>`;
 }
 
 V.acct = () => {
@@ -645,7 +649,7 @@ function ask(title, fields, okText = '確定') {
 let AE = null;
 function openAdd(preset = {}) {
   const cash = C.accounts.find(a => a.type === 'cash');
-  AE = Object.assign({ mode: 'expense', amount: '', from: cash ? cash.id : (C.accounts[0] || {}).id, to: '', category: (C.categories[0] || {}).name || '其他', note: '', date: TODAY, jar: '' }, preset);
+  AE = Object.assign({ mode: 'expense', amount: '', from: cash ? cash.id : (C.accounts[0] || {}).id, to: '', category: (C.categories[0] || {}).name || '其他', note: '', date: TODAY, jar: '', nextCycle: false }, preset);
   drawAdd();
 }
 function drawAdd() {
@@ -657,6 +661,10 @@ function drawAdd() {
   <div class="muted" style="text-align:center"><input type="date" value="${AE.date}" data-ae="date" style="width:auto;display:inline-block;padding:4px 8px;font-size:13px"></div>`;
   if (m === 'expense' || m === 'invest') {
     h += `<div class="field"><label>從哪裡付</label><div class="chips">${accs(['cash', 'card', 'bank']).map(a => chip(a.id, AE.from, `${a.type === 'cash' ? '👛 ' : a.type === 'card' ? '💳 ' : ''}${esc(a.name)}`, 'ae-from')).join('')}</div></div>`;
+  }
+  if ((m === 'expense' || m === 'invest') && acc(AE.from).type === 'card') {
+    const cd = cardOf(AE.from);
+    h += `<label class="card" style="display:flex;gap:10px;align-items:center;padding:10px 12px;margin-top:8px"><input type="checkbox" style="width:auto" data-ae-check="nextCycle" ${AE.nextCycle ? 'checked' : ''}><span class="grow">⏭️ 算下一期帳單<br><span class="muted small">店家還沒請款、這期帳單不會有這筆${cd ? `（${cd.closeDay} 日結帳）` : ''}</span></span></label>`;
   }
   if (m === 'expense') {
     h += `<div class="field"><label>類別（點一下就選好）</label><div class="chips">${C.categories.map(c => chip(c.name, AE.category, `${esc(c.emoji)} ${esc(c.name)}`, 'ae-cat')).join('')}</div></div>`;
@@ -681,7 +689,7 @@ function saveAdd() {
   const a = +AE.amount;
   if (!a) return toast('請輸入金額');
   const m = AE.mode, t = { id: uid(), date: AE.date || TODAY, amount: a, note: AE.note.trim(), created: new Date().toISOString() };
-  if (m === 'expense') { if (!AE.from) return toast('請選擇從哪裡付'); Object.assign(t, { kind: 'expense', from: AE.from, category: AE.category }); if (AE.jar) t.jar = AE.jar; }
+  if (m === 'expense') { if (!AE.from) return toast('請選擇從哪裡付'); Object.assign(t, { kind: 'expense', from: AE.from, category: AE.category }); if (AE.jar) t.jar = AE.jar; if (AE.nextCycle && acc(AE.from).type === 'card' && !AE.jar) t.nextCycle = true; }
   else if (m === 'invest') { if (!AE.from) return toast('請選擇帳戶'); Object.assign(t, { kind: 'invest', from: AE.from, category: '投資' }); }
   else if (m === 'withdraw') {
     const cash = C.accounts.find(x => x.type === 'cash'); if (!cash) return toast('請先新增現金帳戶');
@@ -696,10 +704,11 @@ function saveAdd() {
 // ---------- 交易編輯 ----------
 function openTx(id) {
   const t = D.tx.find(x => x.id === id); if (!t) return;
+  const nc = t.kind === 'expense' && acc(t.from).type === 'card' ? `<div class="field"><label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="nextCycle" style="width:auto" ${t.nextCycle ? 'checked' : ''}> ⏭️ 算下一期帳單（店家還沒請款）</label></div>` : '';
   const catSel = t.kind === 'expense' ? `<div class="field"><label>類別</label><select name="category">${[...C.categories.map(c => c.name), ...Object.keys(SYS_CATS)].filter((v, i, a) => a.indexOf(v) === i).map(c => `<option ${c === t.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>` : '';
   sheet(`<div class="head"><a class="muted" data-act="close">取消</a><b>${esc(KINDS[t.kind] || (t.kind === 'jar' ? '存錢罐' : '對帳調整'))}</b><a class="link" data-act="tx-save">儲存</a></div>
   <form id="txf"><div class="field"><label>金額</label><input name="amount" type="number" inputmode="numeric" value="${Math.abs(t.amount)}"></div>
-  <div class="field"><label>日期</label><input name="date" type="date" value="${t.date}"></div>${catSel}
+  <div class="field"><label>日期</label><input name="date" type="date" value="${t.date}"></div>${nc}${catSel}
   <div class="field"><label>備註</label><input name="note" value="${esc(t.note || '')}"></div></form>
   ${t.ref ? '<p class="muted small" style="margin-top:8px">這筆來自清單，刪除等於取消打勾</p>' : ''}<button class="btn danger" data-act="tx-del">刪除這筆</button>`);
   modalCtx = { tx: t };
@@ -772,6 +781,7 @@ document.addEventListener('click', async e => {
     case 'tx-save': {
       const t = modalCtx.tx, f = $('#txf'), v = +f.elements.amount.value;
       t.amount = t.kind === 'jar' || t.kind === 'adjust' ? (t.amount < 0 ? -v : v) : v; t.date = f.elements.date.value || t.date; t.note = f.elements.note.value; t.edited = true;
+      if (f.elements.nextCycle) { if (f.elements.nextCycle.checked) t.nextCycle = true; else delete t.nextCycle; }
       if (f.elements.category) t.category = f.elements.category.value;
       const linked = D.tx.find(x => x.link === t.id); if (linked) { linked.amount = -v; linked.date = t.date; }
       save(); closeSheet(); render(); break;
@@ -866,6 +876,7 @@ document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.alert) { const c = cardOf(el.dataset.alert); c.alert = +el.value; $(`#al-${c.id}`).textContent = fmt(c.alert); save(); }
   if (el.dataset.ae) AE[el.dataset.ae] = el.value;
+  if (el.dataset.aeCheck) AE[el.dataset.aeCheck] = el.checked;
 });
 document.addEventListener('change', e => {
   const el = e.target;
