@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v15';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -390,6 +390,19 @@ V.home = () => {
 V.list = () => {
   const k = periodOf(TODAY), { start, end } = range(k), items = plan(k), bal = balances();
   let h = `<h1>本期清單</h1><div class="muted">${mdw(start)} – ${mdw(end)}・打勾會自動記下日期，點日期可以改</div>`;
+  if (C.checks.length) {
+    h += `<h2>☑️ 勾選項目</h2><div class="card tight">`;
+    for (const c of C.checks) {
+      const txs = D.tx.filter(t => t.ref && t.ref.startsWith(`${k}|c|${c.id}|`)).sort((a, b) => a.date < b.date ? -1 : 1);
+      if (c.multi) {
+        h += `<div class="item"><button class="btn sm" data-act="check-add" data-id="${c.id}">＋${fmt(c.amount)}</button><span class="grow">${esc(c.name)} <span class="muted">${esc(accName(c.from))}・本期 ${txs.length} 次</span></span><span class="date">${txs.map(t => `<a data-act="tx" data-id="${t.id}">${md(t.date)}</a>`).join('、')}</span></div>`;
+      } else {
+        const t = txs[0];
+        h += `<div class="item"><button class="box ${t ? 'on' : ''}" data-act="check" data-id="${c.id}">${t ? '✓' : ''}</button><span class="grow ${t ? 'done' : ''}">${esc(c.name)} <span class="muted">${esc(accName(c.from))}</span></span>${t ? `<a class="date" data-act="tx" data-id="${t.id}">${md(t.date)}</a>` : ''}<span class="amt ${t ? 'done' : ''}">${fmt(c.amount)}</span></div>`;
+      }
+    }
+    h += `</div>`;
+  }
   if (C.cards.length) {
     h += `<h2>💳 信用卡帳單</h2><div class="card tight">`;
     for (const card of C.cards) {
@@ -408,19 +421,6 @@ V.list = () => {
     const tag = d === start && start !== nominal ? `<span class="tag">${+nominal.slice(8)} 日遇假日，提前</span>` : '';
     h += `<h2>${mdw(d)} ${label} ${tag}${d === TODAY ? ' <span class="tag blue">今天</span>' : ''}</h2><div class="card tight">`;
     for (const it of groups[d]) h += itemRow(it, bal);
-    h += `</div>`;
-  }
-  if (C.checks.length) {
-    h += `<h2>勾選項目</h2><div class="card tight">`;
-    for (const c of C.checks) {
-      const txs = D.tx.filter(t => t.ref && t.ref.startsWith(`${k}|c|${c.id}|`)).sort((a, b) => a.date < b.date ? -1 : 1);
-      if (c.multi) {
-        h += `<div class="item"><button class="btn sm" data-act="check-add" data-id="${c.id}">＋${fmt(c.amount)}</button><span class="grow">${esc(c.name)} <span class="muted">${esc(accName(c.from))}・本期 ${txs.length} 次</span></span><span class="date">${txs.map(t => `<a data-act="tx" data-id="${t.id}">${md(t.date)}</a>`).join('、')}</span></div>`;
-      } else {
-        const t = txs[0];
-        h += `<div class="item"><button class="box ${t ? 'on' : ''}" data-act="check" data-id="${c.id}">${t ? '✓' : ''}</button><span class="grow ${t ? 'done' : ''}">${esc(c.name)} <span class="muted">${esc(accName(c.from))}</span></span>${t ? `<a class="date" data-act="tx" data-id="${t.id}">${md(t.date)}</a>` : ''}<span class="amt ${t ? 'done' : ''}">${fmt(c.amount)}</span></div>`;
-      }
-    }
     h += `</div>`;
   }
   return h;
@@ -520,7 +520,7 @@ V.acct = () => {
     <a class="item" data-act="export"><span class="grow">💾 匯出備份</span><span class="muted">${D.lastExport ? '上次 ' + md(D.lastExport) : '還沒備份過'}・本機／Google Drive ›</span></a>
     <a class="item" data-act="import"><span class="grow">📥 匯入備份／初始設定檔</span><span class="muted">›</span></a>
     <a class="item" data-act="reset"><span class="grow" style="color:var(--red)">🗑️ 清除所有資料</span><span class="muted">›</span></a>
-  </div><p class="muted small" style="margin-top:14px;text-align:center">資料只存在這支手機的瀏覽器裡，記得定期匯出備份</p>`;
+  </div><p class="muted small" style="margin-top:14px;text-align:center">資料只存在這支手機的瀏覽器裡，記得定期匯出備份・版本 ${APP_VER}</p>`;
   return h;
 };
 
