@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v27';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v28';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -720,7 +720,7 @@ document.addEventListener('pointerdown', e => {
   const now = Date.now();
   if (now - tapT > 5000) tapN = 0; // 停超過 5 秒就重來
   tapT = now; tapN++;
-  if (tapN >= 1000) { tapN = 0; location.hash = '#stash'; }
+  if (tapN >= 100) { tapN = 0; location.hash = '#stash'; }
 });
 V.stash = () => {
   const list = [...ST.tx].sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
