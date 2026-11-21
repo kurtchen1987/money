@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v17';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v18';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -810,8 +810,14 @@ function parseDate(x) {
   return null;
 }
 // 分期：備註裡的「3/12期」「第3期」，期數不同就不算重複
-function instNo(note) { const m = String(note || '').match(/(\d+)\s*[\/／]\s*(\d+)\s*期|第\s*(\d+)\s*期/); return m ? (m[1] ? `${m[1]}/${m[2]}` : m[3]) : null; }
-const sameInst = (a, b) => instNo(a) === instNo(b);
+function instNo(note) {
+  const n = String(note || '');
+  let m = n.match(/(\d{1,2})\s*[\/／]\s*(\d{1,2})\s*期/) || (/分期/.test(n) && n.match(/(\d{1,2})\s*[\/／]\s*(\d{1,2})(?!\d)/));
+  if (m) return `${+m[1]}/${+m[2]}`;
+  m = n.match(/第\s*(\d{1,2})\s*期/);
+  return m ? String(+m[1]) : (/分期/.test(n) ? '?' : null);
+}
+const sameInst = (a, b) => { const x = instNo(a), y = instNo(b); if (x === '?' || y === '?') return false; return x === y; };
 function parsePaste(text) {
   const rows = [];
   for (let line of String(text).split(/\r?\n/)) {
@@ -843,7 +849,7 @@ function drawPaste() {
     PI.rows.forEach((r, i) => {
       h += `<div class="item" style="align-items:flex-start"><input type="checkbox" style="width:auto;margin-top:4px" data-pi="${i}" data-pf="on" ${r.on ? 'checked' : ''} ${r.err ? 'disabled' : ''}>
       <div class="grow">${r.err ? `<div class="muted small">${esc(r.raw)}</div><span class="tag red">${esc(r.err)}</span>` : `
-        <div class="row"><span>${md(r.date)}・${esc(accName(r.from))}</span><b>${r.amount < 0 ? '退款 ' : ''}${fmt(Math.abs(r.amount))}</b></div>
+        <div class="row"><span><input type="date" value="${r.date}" data-pi="${i}" data-pf="date" style="width:auto;padding:3px 6px;font-size:13px"> ${esc(accName(r.from))}</span><b>${r.amount < 0 ? '退款 ' : ''}${fmt(Math.abs(r.amount))}</b></div>${diff(r.date, TODAY) > 45 ? `<div class="small" style="color:var(--amber)">⚠️ 這是 ${diff(r.date, TODAY)} 天前的日期，會算進很久以前的帳單；分期請改成這期的入帳日</div>` : ''}
         <div class="muted small">${esc(r.note)}${r.dup === 'batch' ? ' <span class="tag amber">跟上面重複（截圖重疊）</span>' : r.dup ? ' <span class="tag amber">已經記過</span>' : ''}</div>
         <div class="row" style="margin-top:6px;gap:6px"><select data-pi="${i}" data-pf="category" style="padding:6px 8px;font-size:13px">${C.categories.map(c => `<option ${c.name === r.category ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}${C.categories.some(c => c.name === r.category) ? '' : `<option selected>${esc(r.category)}</option>`}</select>
         ${acc(r.from).type === 'card' ? `<label class="small" style="display:flex;gap:4px;align-items:center;white-space:nowrap"><input type="checkbox" style="width:auto" data-pi="${i}" data-pf="nextCycle" ${r.nextCycle ? 'checked' : ''}>⏭️ 下一期</label>` : ''}</div>`}
@@ -900,7 +906,7 @@ document.addEventListener('click', async e => {
     case 'paste-go': {
       const ok = PI.rows.filter(r => r.on && !r.err);
       for (const r of ok) { const t = { id: uid(), date: r.date, kind: 'expense', from: r.from, amount: r.amount, category: r.category, note: r.note, created: new Date().toISOString(), imported: true }; if (r.nextCycle && acc(r.from).type === 'card') t.nextCycle = true; D.tx.push(t); }
-      save(); closeSheet(); render(); toast(`已匯入 ${ok.length} 筆`); break;
+      save(); closeSheet(); render(); toast(`已匯入 ${ok.length} 筆・到「分析 → 明細」或首頁點信用卡查看`); break;
     }
     case 'salary': {
       const P = D.periods[k] || {};
@@ -1050,7 +1056,7 @@ document.addEventListener('input', e => {
   if (el.dataset.alert) { const c = cardOf(el.dataset.alert); c.alert = +el.value; $(`#al-${c.id}`).textContent = fmt(c.alert); save(); }
   if (el.dataset.ae) AE[el.dataset.ae] = el.value;
   if (el.dataset.aeCheck) AE[el.dataset.aeCheck] = el.checked;
-  if (el.dataset.pi != null && PI && PI.rows) { const r = PI.rows[+el.dataset.pi]; r[el.dataset.pf] = el.type === 'checkbox' ? el.checked : el.value; if (el.dataset.pf === 'on') drawPaste(); }
+  if (el.dataset.pi != null && PI && PI.rows) { const r = PI.rows[+el.dataset.pi]; r[el.dataset.pf] = el.type === 'checkbox' ? el.checked : el.value; if (el.dataset.pf === 'date' && el.value) { r.dup = D.tx.some(t => t.kind === 'expense' && t.from === r.from && t.date === r.date && Math.abs(+t.amount) === Math.abs(r.amount) && sameInst(t.note, r.note)); r.on = !r.dup; drawPaste(); } if (el.dataset.pf === 'on') drawPaste(); }
 });
 document.addEventListener('change', e => {
   const el = e.target;
