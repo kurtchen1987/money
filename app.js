@@ -126,6 +126,7 @@ function balances(upTo = TODAY) {
     else if (t.kind === 'expense' || t.kind === 'invest') add(t.from, -a);
     else if (t.kind === 'transfer') { add(t.from, -a); add(t.to, a); }
     else if (t.kind === 'adjust') add(t.to, a);
+    else if (t.kind === 'jar' && !t.noAcct) add(C.savings, -a); // 罐子＝分割帳戶：存進去從主帳戶扣，拿回來加回主帳戶
   }
   return b;
 }
@@ -216,7 +217,7 @@ function budget(k) {
   const manualInvest = sum(D.tx.filter(t => !t.ref && t.kind === 'invest' && inP(t)), t => t.amount);
   const spentTx = D.tx.filter(t => inP(t) && t.kind === 'expense' && t.src !== 'plan');
   const spent = sum(spentTx, t => t.amount);
-  const saved = sum(D.tx.filter(t => t.kind === 'jar' && inP(t)), t => t.amount);
+  const saved = sum(D.tx.filter(t => t.kind === 'jar' && !t.opening && inP(t)), t => t.amount);
   const base = income - fixed - manualInvest;
   const remaining = base - spent - saved;
   return { items, salary, income, fixed, invest, spent, saved, base, remaining, spentTx };
@@ -464,8 +465,7 @@ V.jars = () => {
   const jb = jarBalances(), bal = balances(), sv = C.savings, tot = sum(C.jars, j => jb[j.id] || 0);
   let h = `<div class="row"><a class="muted" href="#home">‹ 首頁</a><b>存錢罐</b><span style="width:40px"></span></div>`;
   if (sv && acc(sv).type !== 'ext') {
-    const un = (bal[sv] || 0) - tot;
-    h += `<div class="card hero"><div class="muted">${esc(accName(sv))} 存款</div><div class="big" style="font-size:30px">${fmt(bal[sv])}</div><div class="muted">${C.jars.length} 個罐子共 ${fmt(tot)}・${un >= 0 ? `還沒分配 ${fmt(un)}` : `罐子比帳戶多 ${fmt(-un)}，記得對帳`}</div></div>`;
+    h += `<div class="card hero"><div class="muted">${esc(accName(sv))} 總額（主帳戶＋分割帳戶）</div><div class="big" style="font-size:30px">${fmt((bal[sv] || 0) + tot)}</div><div class="muted">主帳戶 ${fmt(bal[sv])}・${C.jars.length} 個分割帳戶共 ${fmt(tot)}</div></div>`;
   }
   for (const j of C.jars) {
     const v = jb[j.id] || 0, pct = j.target > 0 ? Math.min(100, v / j.target * 100) : 0;
@@ -490,10 +490,11 @@ V.jars = () => {
 };
 
 V['set-bal'] = () => {
-  const bal = balances();
+  const bal = balances(), jb = jarBalances();
   return `<div class="row"><a class="muted" href="#acct">‹ 帳戶</a><b>輸入目前餘額</b><span style="width:40px"></span></div>
-  <p class="muted" style="margin-top:8px">打開各銀行 App，照實際餘額填。沒變的不用動；信用卡填「目前還沒繳的金額」（刷了還沒繳的錢），沒欠就填 0</p>
+  <p class="muted" style="margin-top:8px">打開各銀行 App，照實際餘額填（LINE Bank 填主帳戶，分割帳戶填在最下面）。沒變的不用動；信用卡填「目前還沒繳的金額」（刷了還沒繳的錢），沒欠就填 0</p>
   <form id="balf"><div class="card">${C.accounts.map(a => `<div class="field"><label>${a.type === 'cash' ? '👛 ' : a.type === 'card' ? '💳 ' : '🏦 '}${esc(a.name)}${a.type === 'card' ? '（還沒繳的金額）' : ''}</label><input name="${a.id}" type="number" inputmode="numeric" value="${a.type === 'card' ? -bal[a.id] : bal[a.id]}" data-was="${a.type === 'card' ? -bal[a.id] : bal[a.id]}"></div>`).join('')}
+  ${C.jars.length ? `<h2 style="margin-top:14px">${esc(accName(C.savings))} 分割帳戶（存錢罐）</h2>${C.jars.map(j => `<div class="field"><label>${esc(j.emoji)} ${esc(j.name)}</label><input name="jar_${j.id}" type="number" inputmode="numeric" value="${jb[j.id] || 0}" data-was="${jb[j.id] || 0}"></div>`).join('')}` : ''}
   <div class="field"><label>以哪天為準</label><input name="__date" type="date" value="${TODAY}"></div></div>
   <button class="btn" data-act="bal-save">儲存</button></form>`;
 };
@@ -626,7 +627,7 @@ function drawAdd() {
   }
   if (m === 'expense') {
     h += `<div class="field"><label>類別（點一下就選好）</label><div class="chips">${C.categories.map(c => chip(c.name, AE.category, `${esc(c.emoji)} ${esc(c.name)}`, 'ae-cat')).join('')}</div></div>`;
-    h += `<div class="field"><label>從存錢罐出（可不選）</label><div class="chips">${chip('', AE.jar, '不是', 'ae-jar')}${C.jars.map(j => chip(j.id, AE.jar, `${esc(j.emoji)} ${esc(j.name)}`, 'ae-jar')).join('')}</div></div>`;
+    h += `<div class="field"><label>直接從分割帳戶（罐子）付（可不選，選了就不扣上面的帳戶）</label><div class="chips">${chip('', AE.jar, '不是', 'ae-jar')}${C.jars.map(j => chip(j.id, AE.jar, `${esc(j.emoji)} ${esc(j.name)}`, 'ae-jar')).join('')}</div></div>`;
   }
   if (m === 'withdraw' || m === 'transfer') {
     h += `<div class="field"><label>從哪個帳戶</label><div class="chips">${accs(['bank']).map(a => chip(a.id, AE.from, esc(a.name), 'ae-from')).join('')}</div></div>`;
@@ -655,7 +656,7 @@ function saveAdd() {
   } else if (m === 'transfer') { if (!AE.from || !AE.to || AE.from === AE.to) return toast('請選擇兩個不同帳戶'); Object.assign(t, { kind: 'transfer', from: AE.from, to: AE.to }); }
   else if (m === 'income') { if (!AE.to) return toast('請選擇進哪個帳戶'); Object.assign(t, { kind: 'income', to: AE.to, category: AE.category || '其他收入' }); }
   D.tx.push(t);
-  if (t.jar) D.tx.push({ id: uid(), date: t.date, kind: 'jar', jar: t.jar, amount: -a, note: `拿出來用：${t.note || t.category}`, link: t.id });
+  if (t.jar) { t.from = ''; D.tx.push({ id: uid(), date: t.date, kind: 'jar', jar: t.jar, amount: -a, note: `拿出來用：${t.note || t.category}`, link: t.id, noAcct: true }); }
   save(); closeSheet(); render(); toast(`已記下 ${fmt(a)}`);
 }
 
@@ -759,6 +760,12 @@ document.addEventListener('click', async e => {
         D.tx.push({ id: uid(), date, kind: 'adjust', to: a.id, amount: delta, note: '輸入目前餘額', opening: true });
         D.recon.acc ||= {}; D.recon.acc[a.id] = { date: TODAY, delta: 0 }; n++;
       }
+      const jb = jarBalances();
+      for (const j of C.jars) {
+        const el = f.elements[`jar_${j.id}`]; if (!el || el.value === '' || el.value === el.dataset.was) continue;
+        const delta = +el.value - (jb[j.id] || 0);
+        if (delta) { D.tx.push({ id: uid(), date, kind: 'jar', jar: j.id, amount: delta, note: '輸入目前金額', noAcct: true, opening: true }); n++; }
+      }
       D.recon.last = TODAY;
       save(); location.hash = '#acct'; toast(n ? `已更新 ${n} 個帳戶` : '沒有變動'); break;
     }
@@ -776,18 +783,19 @@ document.addEventListener('click', async e => {
       save(); render(); toast(delta ? `差 ${fmt(delta)}，已調整` : '對上了 👍'); break;
     }
     case 'jar-in': case 'jar-out': {
-      const out = act === 'jar-out';
-      const r = await ask(out ? '從存錢罐拿出來' : '存進存錢罐', [
+      const out = act === 'jar-out', sv = accName(C.savings);
+      const r = await ask(out ? '從分割帳戶拿出來' : `從 ${esc(sv)} 主帳戶存進分割帳戶`, [
         { label: '哪個罐子', name: 'jar', html: `<select name="jar">${C.jars.map(j => `<option value="${j.id}">${esc(j.emoji)} ${esc(j.name)}</option>`).join('')}</select>` },
         { label: '金額', name: 'v', type: 'number' }, { label: '日期', name: 'date', type: 'date', value: TODAY },
-        ...(out ? [{ label: '同時記一筆支出（拿出來花掉的話打勾）', name: 'exp', html: `<label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="exp" style="width:auto" checked> 是，類別：</label><select name="cat" style="margin-top:6px">${C.categories.map(c => `<option>${esc(c.name)}</option>`).join('')}</select>` }, { label: '從哪裡付', name: 'from', html: accSelect('from', C.savings) }] : [])
+        ...(out ? [{ label: '拿出來做什麼', name: 'how', html: `<select name="how"><option value="back">轉回 ${esc(sv)} 主帳戶</option><option value="spend">直接花掉（記一筆支出）</option></select>` },
+          { label: '（花掉的話）類別', name: 'cat', html: `<select name="cat">${C.categories.map(c => `<option>${esc(c.name)}</option>`).join('')}</select>` }] : [])
       ], out ? '拿出來' : '存進去');
       if (!r || !+r.v) break;
-      const v = +r.v, j = C.jars.find(x => x.id === r.jar);
-      if (out && r.exp) {
-        const ex = { id: uid(), date: r.date || TODAY, kind: 'expense', from: r.from || C.savings, amount: v, category: r.cat, note: `${j.name}`, jar: j.id };
-        D.tx.push(ex, { id: uid(), date: ex.date, kind: 'jar', jar: j.id, amount: -v, note: `拿出來用：${r.cat}`, link: ex.id });
-      } else D.tx.push({ id: uid(), date: r.date || TODAY, kind: 'jar', jar: j.id, amount: out ? -v : v, note: out ? '拿出來' : '存進去' });
+      const v = +r.v, j = C.jars.find(x => x.id === r.jar), date = r.date || TODAY;
+      if (out && r.how === 'spend') {
+        const ex = { id: uid(), date, kind: 'expense', from: '', amount: v, category: r.cat, note: j.name, jar: j.id };
+        D.tx.push(ex, { id: uid(), date, kind: 'jar', jar: j.id, amount: -v, note: `拿出來用：${r.cat}`, link: ex.id, noAcct: true });
+      } else D.tx.push({ id: uid(), date, kind: 'jar', jar: j.id, amount: out ? -v : v, note: out ? `轉回 ${sv}` : `從 ${sv} 存進去` });
       save(); render(); toast(`${j.emoji} ${out ? '拿出' : '存入'} ${fmt(v)}`); break;
     }
     case 'jar-edit': {
