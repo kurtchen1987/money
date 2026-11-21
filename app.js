@@ -310,6 +310,16 @@ V.home = () => {
   if (!D.tx.some(t => t.kind === 'adjust' || t.opening)) h += `<div class="info">👋 第一次使用：先<a class="link" href="#set-bal">輸入各帳戶目前的餘額</a>，App 才算得出正確的錢</div>`;
   if (dow(TODAY) === +C.reconDay && D.recon.last !== TODAY) h += `<div class="info">🧾 今天是對帳日：數一下錢包、對一下各帳戶餘額・<a class="link" href="#acct">去對帳</a></div>`;
   if (!D.lastExport || diff(D.lastExport, TODAY) >= 7) h += `<div class="note">💾 ${D.lastExport ? `上次備份是 ${md(D.lastExport)}` : '還沒備份過'}・<a class="link" data-act="export">現在匯出</a></div>`;
+  // 各帳戶餘額（LINE Bank 這類放罐子的帳戶顯示主帳戶＋分割帳戶的總額）
+  const jt = sum(C.jars, j => jarBalances()[j.id] || 0);
+  const bal = balances(), shown = C.accounts.filter(a => a.type !== 'cash');
+  if (shown.length) {
+    h += `<h2>帳戶餘額</h2><a class="grid3" href="#acct">${shown.map(a => {
+      const isSv = a.id === C.savings && C.jars.length, v = a.type === 'card' ? -bal[a.id] : bal[a.id] + (isSv ? jt : 0);
+      const sub = a.type === 'card' ? (v < 0 ? '溢繳' : '未繳') : isSv ? `含罐子 ${fmt(jt)}` : '';
+      return `<div class="card" style="margin:0;padding:10px"><div class="muted small">${a.type === 'card' ? '💳 ' : ''}${esc(a.name)}</div><div style="font-weight:700;font-size:16px;margin-top:2px;${v < 0 && a.type !== 'card' ? 'color:var(--red)' : ''}">${fmt(a.type === 'card' ? Math.abs(v) : v)}</div>${sub ? `<div class="muted small">${sub}</div>` : ''}</div>`;
+    }).join('')}</a>`;
+  }
   // 存錢罐
   const jb = jarBalances();
   h += `<a class="card" href="#jars" style="display:block"><div class="row"><b>🐷 存錢罐</b><span class="muted">這期存了 ${fmt(B.saved)} ›</span></div>`;
@@ -328,9 +338,9 @@ V.home = () => {
     }
     h += `</div>`;
   }
-  const bal = balances(), cash = C.accounts.find(a => a.type === 'cash'), pend = pending(k);
+  const bal2 = balances(), cash = C.accounts.find(a => a.type === 'cash'), pend = pending(k);
   const lastW = D.tx.filter(t => t.kind === 'transfer' && cash && t.to === cash.id).sort((a, b) => a.date < b.date ? 1 : -1)[0];
-  h += `<div class="mini">${cash ? `<a class="card" href="#acct"><b>👛 現金錢包</b><div class="num">${fmt(bal[cash.id])}</div><span class="muted">${lastW ? `${md(lastW.date)} 領 ${fmt(lastW.amount)}` : '還沒領過現金'}</span></a>` : ''}
+  h += `<div class="mini">${cash ? `<a class="card" href="#acct"><b>👛 現金錢包</b><div class="num">${fmt(bal2[cash.id])}</div><span class="muted">${lastW ? `${md(lastW.date)} 領 ${fmt(lastW.amount)}` : '還沒領過現金'}</span></a>` : ''}
     <a class="card" href="#list"><b>📋 待處理</b><div class="num">${pend.length} 件</div>${pend[0] ? `<span class="muted">${esc(pend[0].title)}</span>` : '<span class="tag">都處理好了</span>'}</a></div>`;
   return h;
 };

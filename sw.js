@@ -1,5 +1,5 @@
 // 離線快取：App 本體存在手機裡，沒網路也打得開
-const VERSION = 'money-v2';
+const VERSION = 'money-v3';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
