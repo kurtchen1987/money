@@ -198,7 +198,9 @@ function autopost() {
 
 // 刷卡算哪一期：勾了「算下一期」就用下一次結帳的隔天當入帳日
 function nextCloseAfter(card, date) { let c = dateIn(date.slice(0, 7), +card.closeDay); if (c < date) c = dateIn(nextMonth(date.slice(0, 7)), +card.closeDay); return c; }
-function postDate(t) { if (!t.nextCycle) return t.date; const card = cardOf(t.from); return card ? addDays(nextCloseAfter(card, t.date), 1) : t.date; }
+const NEXT_WINDOW = 10; // 結帳日前幾天內刷的才可能被延到下一期
+function nextOk(card, date) { return !!card && diff(date, nextCloseAfter(card, date)) <= NEXT_WINDOW; }
+function postDate(t) { if (!t.nextCycle) return t.date; const card = cardOf(t.from); return nextOk(card, t.date) ? addDays(nextCloseAfter(card, t.date), 1) : t.date; }
 
 function cycle(card, ref = TODAY) {
   let close = dateIn(ref.slice(0, 7), +card.closeDay);
@@ -216,7 +218,9 @@ function cardStatus(card) {
   let payItem = null;
   const k = periodOf(TODAY);
   for (const kk of [nextMonth(k, -1), k, nextMonth(k)]) { const it = plan(kk).find(i => i.cardPay && i.to === card.id && i.billKey === key); if (it) { payItem = it; break; } }
-  const filled = D.bills[key] != null, bill = filled ? D.bills[key] : est;
+  // 沒填帳單時：用「總欠款－結帳後新刷」估（含輸入目前餘額時填的），算不出來才用刷卡加總
+  const owed = Math.max(0, -(balances()[card.id] || 0) - cy.spend);
+  const filled = D.bills[key] != null, bill = filled ? D.bills[key] : (owed || est);
   return { key, lastClose, bill, filled, paid: !!(payItem && payItem.tx), payDate: payItem ? payItem.date : null, newSpend: cy.spend, cy };
 }
 
@@ -386,6 +390,16 @@ V.home = () => {
 V.list = () => {
   const k = periodOf(TODAY), { start, end } = range(k), items = plan(k), bal = balances();
   let h = `<h1>本期清單</h1><div class="muted">${mdw(start)} – ${mdw(end)}・打勾會自動記下日期，點日期可以改</div>`;
+  if (C.cards.length) {
+    h += `<h2>💳 信用卡帳單</h2><div class="card tight">`;
+    for (const card of C.cards) {
+      const st = cardStatus(card), nk = `${card.id}|${st.cy.end.slice(0, 7)}`;
+      const right = st.paid ? `<span class="tag">✓ 已扣款</span>` : `<a class="amt link" data-act="bill" data-key="${esc(st.key)}" data-spend="${st.filled ? D.bills[st.key] : st.bill}">${st.filled ? fmt(st.bill) + ' ›' : '填金額 ›'}</a>`;
+      h += `<div class="item"><span class="tag ${st.filled || st.paid ? '' : 'amber'}">${st.paid ? '已繳' : st.filled ? '待繳' : '待填'}</span><span class="grow">${esc(accName(card.id))} <span class="muted">${md(st.lastClose)} 結帳${st.payDate ? `・${md(st.payDate)} 扣款` : ''}${st.filled || st.paid ? '' : `・App 記到 ${fmt(st.bill)}`}</span></span>${right}</div>`;
+      if (D.bills[nk] != null && TODAY <= st.cy.end) h += `<div class="item"><span class="tag red">注意</span><span class="grow small">${md(st.cy.end)} 還沒結帳，卻填了 ${fmt(D.bills[nk])}。如果這其實是 ${md(st.lastClose)} 的帳單</span><a class="link small" data-act="bill-move" data-from="${esc(nk)}" data-to="${esc(st.key)}">移過去 ›</a></div>`;
+    }
+    h += `</div>`;
+  }
   const groups = {};
   for (const it of items) (groups[it.date] ||= []).push(it);
   for (const d of Object.keys(groups).sort()) {
@@ -418,6 +432,7 @@ function itemRow(it, bal) {
   if (it.need === 'salary') {
     return `<div class="item"><span class="tag ${it.amount == null ? 'amber' : ''}">${it.amount == null ? '待填' : it.done ? '已入帳' : '已輸入'}</span><span class="grow">薪水 → ${esc(accName(it.to))}</span><a class="amt link" data-act="salary" data-k="${it.key.split('|')[0]}">${it.amount == null ? '輸入 ›' : fmt(it.amount)}</a></div>`;
   }
+  if (it.kind === 'bill' && it.date > TODAY && D.bills[it.billKey] == null) return `<div class="item"><span class="tag gray">還沒結帳</span><span class="grow muted">${esc(it.title)}（${md(it.close)} 結帳後才能填）</span></div>`;
   if (it.kind === 'bill') {
     const v = D.bills[it.billKey], card = cardOf(it.card), spend = card ? sum(D.tx.filter(x => x.kind === 'expense' && x.from === card.id && postDate(x) > dateIn(nextMonth(it.close.slice(0, 7), -1), +card.closeDay) && postDate(x) <= it.close), x => x.amount) : 0;
     return `<div class="item"><span class="tag ${v == null ? 'amber' : ''}">${v == null ? '待填' : '已填'}</span><span class="grow">${esc(it.title)} <span class="muted">${md(it.close)} 結帳・App 記到 ${fmt(spend)}</span></span><a class="amt link" data-act="bill" data-key="${esc(it.billKey)}" data-spend="${spend}">${v == null ? '填金額 ›' : fmt(v)}</a></div>`;
@@ -537,11 +552,13 @@ V.jars = () => {
   return h;
 };
 
+function cardBalLabel(id) { const c = cardOf(id); if (!c) return '（還沒繳的金額）'; const st = cardStatus(c); return `：${md(st.lastClose)} 結帳的帳單還沒繳多少${st.payDate ? `（${md(st.payDate)} 扣款）` : ''}，結帳後新刷的請用記帳記`; }
+function cardBalValue(id, bal) { const c = cardOf(id); if (!c) return -bal[id]; const st = cardStatus(c); return st.paid ? 0 : (D.bills[st.key] ?? Math.max(0, -bal[id] - st.newSpend)); }
 V['set-bal'] = () => {
   const bal = balances(), jb = jarBalances();
   return `<div class="row"><a class="muted" href="#acct">‹ 帳戶</a><b>輸入目前餘額</b><span style="width:40px"></span></div>
   <p class="muted" style="margin-top:8px">打開各銀行 App，照實際餘額填（LINE Bank 填主帳戶，分割帳戶填在最下面）。沒變的不用動；信用卡填「目前還沒繳的金額」（刷了還沒繳的錢），沒欠就填 0</p>
-  <form id="balf"><div class="card">${C.accounts.map(a => `<div class="field"><label>${a.type === 'cash' ? '👛 ' : a.type === 'card' ? '💳 ' : '🏦 '}${esc(a.name)}${a.type === 'card' ? '（還沒繳的金額）' : ''}</label><input name="${a.id}" type="number" inputmode="numeric" value="${a.type === 'card' ? -bal[a.id] : bal[a.id]}" data-was="${a.type === 'card' ? -bal[a.id] : bal[a.id]}"></div>`).join('')}
+  <form id="balf"><div class="card">${C.accounts.map(a => `<div class="field"><label>${a.type === 'cash' ? '👛 ' : a.type === 'card' ? '💳 ' : '🏦 '}${esc(a.name)}${a.type === 'card' ? cardBalLabel(a.id) : ''}</label><input name="${a.id}" type="number" inputmode="numeric" value="${a.type === 'card' ? cardBalValue(a.id, bal) : bal[a.id]}" data-was="${a.type === 'card' ? cardBalValue(a.id, bal) : bal[a.id]}"></div>`).join('')}
   ${C.jars.length ? `<h2 style="margin-top:14px">${esc(accName(C.savings))} 分割帳戶（存錢罐）</h2>${C.jars.map(j => `<div class="field"><label>${esc(j.emoji)} ${esc(j.name)}</label><input name="jar_${j.id}" type="number" inputmode="numeric" value="${jb[j.id] || 0}" data-was="${jb[j.id] || 0}"></div>`).join('')}` : ''}
   <div class="field"><label>以哪天為準</label><input name="__date" type="date" value="${TODAY}"></div></div>
   <button class="btn" data-act="bal-save">儲存</button></form>`;
@@ -778,7 +795,7 @@ function parsePaste(text) {
     const f = line.split(/\t|,|，/).map(x => x.trim());
     const date = parseDate(f[0]), a = findAcc(f[1]), amount = +String(f[2] || '').replace(/[^\d.\-]/g, '');
     const cat = f[3] && (C.categories.some(c => c.name === f[3]) || SYS_CATS[f[3]]) ? f[3] : '其他';
-    const r = { raw: line, date, from: a ? a.id : '', amount, category: cat, note: f[4] || '', nextCycle: /下一期/.test(f[5] || ''), on: true, err: '' };
+    const r = { raw: line, date, from: a ? a.id : '', amount, category: cat, note: f[4] || '', nextCycle: /下一期/.test(f[5] || '') && !!a && nextOk(cardOf(a.id), date || TODAY), on: true, err: '' };
     if (!date) r.err = '日期看不懂'; else if (!a) r.err = `找不到帳戶「${f[1] || ''}」`; else if (!amount) r.err = '金額看不懂';
     if (r.err) r.on = false;
     else r.dup = D.tx.some(t => t.kind === 'expense' && t.from === r.from && t.date === r.date && Math.abs(+t.amount) === Math.abs(r.amount) && sameInst(t.note, r.note));
@@ -918,7 +935,12 @@ document.addEventListener('click', async e => {
       let n = 0;
       for (const a of C.accounts) {
         const el = f.elements[a.id]; if (!el || el.value === '' || el.value === el.dataset.was) continue;
-        const want = a.type === 'card' ? -Math.abs(+el.value) : +el.value, delta = want - bal[a.id];
+        let want = +el.value;
+        if (a.type === 'card') {
+          const c = cardOf(a.id), st = c ? cardStatus(c) : null, v = Math.abs(+el.value);
+          if (st) { if (!st.paid) D.bills[st.key] = v; want = -(v + st.newSpend); } else want = -v;
+        }
+        const delta = want - bal[a.id];
         if (!delta) continue;
         D.tx.push({ id: uid(), date, kind: 'adjust', to: a.id, amount: delta, note: '輸入目前餘額', opening: true });
         D.recon.acc ||= {}; D.recon.acc[a.id] = { date: TODAY, delta: 0 }; n++;
@@ -933,6 +955,7 @@ document.addEventListener('click', async e => {
       save(); location.hash = '#acct'; toast(n ? `已更新 ${n} 個帳戶` : '沒有變動'); checkJarGoals(); break;
     }
     case 'pk': statsKey = k; render(); break;
+    case 'bill-move': { const fk = el.dataset.from, tk = el.dataset.to; D.bills[tk] = D.bills[fk]; delete D.bills[fk]; save(); autopost(); render(); toast('已移到正確的帳單'); break; }
     case 'reward-close': el.closest('.reward').remove(); break;
     case 'reward-show': celebrate(C.jars.find(x => x.id === el.dataset.id)); break;
     case 'recon': {
