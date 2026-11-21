@@ -655,7 +655,7 @@ function openAdd(preset = {}) {
 function drawAdd() {
   const m = AE.mode, chip = (val, cur, label, act) => `<button class="chip ${val === cur ? 'on' : ''}" data-act="${act}" data-v="${esc(val)}">${label}</button>`;
   const accs = (types) => C.accounts.filter(a => !types || types.includes(a.type));
-  let h = `<div class="head"><a class="muted" data-act="close">取消</a><b>記一筆</b><span style="width:30px"></span></div>
+  let h = `<div class="head"><a class="muted" data-act="close">取消</a><b>記一筆</b><a class="link" data-act="paste">📋 貼上匯入</a></div>
   <div class="seg">${[['expense', '支出'], ['withdraw', '領現金'], ['income', '收入'], ['transfer', '互轉'], ['invest', '投資']].map(([v, l]) => `<button class="${m === v ? 'on' : ''}" data-act="ae-mode" data-v="${v}">${l}</button>`).join('')}</div>
   <div class="bigamt">$ ${AE.amount ? fmt(+AE.amount) : '0'}</div>
   <div class="muted" style="text-align:center"><input type="date" value="${AE.date}" data-ae="date" style="width:auto;display:inline-block;padding:4px 8px;font-size:13px"></div>`;
@@ -701,6 +701,64 @@ function saveAdd() {
   save(); closeSheet(); render(); toast(`已記下 ${fmt(a)}`);
 }
 
+// ---------- 貼上匯入（Claude 讀截圖後產生的文字） ----------
+// 格式：日期,帳戶,金額,類別,備註,標記   金額負數＝退款；標記「下一期」＝算下一期帳單
+let PI = null;
+const normName = x => String(x || '').replace(/\s+/g, '').toLowerCase();
+function findAcc(name) {
+  const n = normName(name); if (!n) return null;
+  return C.accounts.find(a => normName(a.name) === n) || C.accounts.find(a => normName(a.name).includes(n) || n.includes(normName(a.name))) || null;
+}
+function parseDate(x) {
+  x = String(x || '').trim().replace(/[.\/]/g, '-');
+  let m = x.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return `${m[1]}-${pad(+m[2])}-${pad(+m[3])}`;
+  m = x.match(/^(\d{2,3})-(\d{1,2})-(\d{1,2})$/); // 民國年
+  if (m) return `${+m[1] + 1911}-${pad(+m[2])}-${pad(+m[3])}`;
+  m = x.match(/^(\d{1,2})-(\d{1,2})$/);
+  if (m) { let y = +TODAY.slice(0, 4), s = `${y}-${pad(+m[1])}-${pad(+m[2])}`; if (s > addDays(TODAY, 1)) s = `${y - 1}-${pad(+m[1])}-${pad(+m[2])}`; return s; }
+  return null;
+}
+function parsePaste(text) {
+  const rows = [];
+  for (let line of String(text).split(/\r?\n/)) {
+    line = line.replace(/^```.*$/, '').trim();
+    if (!line || line.startsWith('#') || /^日期[,，\t]/.test(line)) continue;
+    const f = line.split(/\t|,|，/).map(x => x.trim());
+    const date = parseDate(f[0]), a = findAcc(f[1]), amount = +String(f[2] || '').replace(/[^\d.\-]/g, '');
+    const cat = f[3] && (C.categories.some(c => c.name === f[3]) || SYS_CATS[f[3]]) ? f[3] : '其他';
+    const r = { raw: line, date, from: a ? a.id : '', amount, category: cat, note: f[4] || '', nextCycle: /下一期/.test(f[5] || ''), on: true, err: '' };
+    if (!date) r.err = '日期看不懂'; else if (!a) r.err = `找不到帳戶「${f[1] || ''}」`; else if (!amount) r.err = '金額看不懂';
+    if (r.err) r.on = false;
+    else r.dup = D.tx.some(t => t.kind === 'expense' && t.from === r.from && t.date === r.date && Math.abs(+t.amount) === Math.abs(r.amount));
+    if (r.dup) r.on = false;
+    rows.push(r);
+  }
+  return rows;
+}
+function drawPaste() {
+  let h = `<div class="head"><a class="muted" data-act="close">取消</a><b>📋 貼上匯入</b><span style="width:30px"></span></div>`;
+  if (!PI.rows) {
+    h += `<p class="muted" style="margin-top:6px">把 Claude 整理好的文字整段貼進來，一筆一行：<br><code>日期,帳戶,金額,類別,備註,標記</code><br>金額負數＝退款；標記寫「下一期」＝算下一期帳單</p>
+    <textarea id="pastebox" rows="9" style="margin-top:10px;font-size:13px" placeholder="2026-11-18,CUBE 卡,800,餐飲,全家,下一期">${esc(PI.text || '')}</textarea>
+    <div class="row" style="margin-top:10px"><button class="btn ghost" style="margin:0" data-act="paste-clip">從剪貼簿貼上</button><button class="btn" style="margin:0" data-act="paste-parse">下一步：預覽</button></div>`;
+  } else {
+    const ok = PI.rows.filter(r => r.on), tot = sum(ok, r => r.amount);
+    h += `<p class="muted" style="margin-top:6px">打勾的會匯入。「可能重複」是同一天、同帳戶、同金額已經記過的，預設不勾</p><div class="card tight">`;
+    PI.rows.forEach((r, i) => {
+      h += `<div class="item" style="align-items:flex-start"><input type="checkbox" style="width:auto;margin-top:4px" data-pi="${i}" data-pf="on" ${r.on ? 'checked' : ''} ${r.err ? 'disabled' : ''}>
+      <div class="grow">${r.err ? `<div class="muted small">${esc(r.raw)}</div><span class="tag red">${esc(r.err)}</span>` : `
+        <div class="row"><span>${md(r.date)}・${esc(accName(r.from))}</span><b>${r.amount < 0 ? '退款 ' : ''}${fmt(Math.abs(r.amount))}</b></div>
+        <div class="muted small">${esc(r.note)}${r.dup ? ' <span class="tag amber">可能重複</span>' : ''}</div>
+        <div class="row" style="margin-top:6px;gap:6px"><select data-pi="${i}" data-pf="category" style="padding:6px 8px;font-size:13px">${C.categories.map(c => `<option ${c.name === r.category ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}${C.categories.some(c => c.name === r.category) ? '' : `<option selected>${esc(r.category)}</option>`}</select>
+        ${acc(r.from).type === 'card' ? `<label class="small" style="display:flex;gap:4px;align-items:center;white-space:nowrap"><input type="checkbox" style="width:auto" data-pi="${i}" data-pf="nextCycle" ${r.nextCycle ? 'checked' : ''}>⏭️ 下一期</label>` : ''}</div>`}
+      </div></div>`;
+    });
+    h += `</div><button class="btn" data-act="paste-go">匯入 ${ok.length} 筆（共 ${fmt(tot)}）</button><button class="btn ghost" data-act="paste-back">回上一步</button>`;
+  }
+  sheet(h, 'addsheet');
+}
+
 // ---------- 交易編輯 ----------
 function openTx(id) {
   const t = D.tx.find(x => x.id === id); if (!t) return;
@@ -739,6 +797,15 @@ document.addEventListener('click', async e => {
       $('.bigamt').textContent = `$ ${AE.amount ? fmt(+AE.amount) : '0'}`; break;
     }
     case 'ae-save': saveAdd(); break;
+    case 'paste': PI = { text: '', rows: null }; drawPaste(); break;
+    case 'paste-clip': try { PI.text = await navigator.clipboard.readText(); drawPaste(); } catch (err) { toast('讀不到剪貼簿，請長按輸入框貼上'); } break;
+    case 'paste-parse': PI.text = $('#pastebox').value; PI.rows = parsePaste(PI.text); if (!PI.rows.length) { PI.rows = null; toast('沒有讀到資料'); } drawPaste(); break;
+    case 'paste-back': PI.rows = null; drawPaste(); break;
+    case 'paste-go': {
+      const ok = PI.rows.filter(r => r.on && !r.err);
+      for (const r of ok) { const t = { id: uid(), date: r.date, kind: 'expense', from: r.from, amount: r.amount, category: r.category, note: r.note, created: new Date().toISOString(), imported: true }; if (r.nextCycle && acc(r.from).type === 'card') t.nextCycle = true; D.tx.push(t); }
+      save(); closeSheet(); render(); toast(`已匯入 ${ok.length} 筆`); break;
+    }
     case 'salary': {
       const P = D.periods[k] || {};
       const r = await ask(`${+k.slice(5)} 月薪水`, [{ label: `發薪日 ${mdw(payday(k))}，入 ${esc(accName(C.salary.to))}`, name: 'v', type: 'number', value: P.salary ?? '' }], '儲存');
@@ -877,6 +944,7 @@ document.addEventListener('input', e => {
   if (el.dataset.alert) { const c = cardOf(el.dataset.alert); c.alert = +el.value; $(`#al-${c.id}`).textContent = fmt(c.alert); save(); }
   if (el.dataset.ae) AE[el.dataset.ae] = el.value;
   if (el.dataset.aeCheck) AE[el.dataset.aeCheck] = el.checked;
+  if (el.dataset.pi != null && PI && PI.rows) { const r = PI.rows[+el.dataset.pi]; r[el.dataset.pf] = el.type === 'checkbox' ? el.checked : el.value; if (el.dataset.pf === 'on') drawPaste(); }
 });
 document.addEventListener('change', e => {
   const el = e.target;
