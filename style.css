@@ -162,3 +162,16 @@ body:not(.adv) .mascot{display:none}
 /* 私房錢 */
 .stash .card.tight{border-color:#3b2a5a}
 body.adv .stash .hero{background:#3b2a5a}
+
+/* 錢寶等級、徽章 */
+.lvline{display:flex;align-items:center;gap:8px;margin:2px 0 4px;font-size:13px}
+.lvbar{flex:1;max-width:160px;height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+.lvbar i{display:block;height:100%;background:#3b74d1}
+body.adv .lvbar{border:2px solid #262626;height:10px;background:#3a3a3a}
+.badges{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.badge{background:var(--card);border-radius:12px;padding:10px 6px;text-align:center;opacity:.55;font-size:12px}
+.badge.on{opacity:1}
+.badge .be{font-size:28px}
+.badge b{display:block;margin-top:2px}
+.badge span{color:var(--sub);font-size:10px}
+body.adv .badge{border:2px solid #262626;box-shadow:2px 2px 0 #262626}
