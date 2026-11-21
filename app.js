@@ -1103,7 +1103,7 @@ async function doExport() {
   const file = new File([blob], name, { type: 'application/json' });
   const done = () => { D.lastExport = TODAY; save(); render(); };
   try {
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); // 不帶標題，避免 Google Drive 多存一個 .txt done(); toast('選 Google Drive →「記帳備份」資料夾 → 儲存'); return; }
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); /* 不帶標題，避免 Google Drive 多存一個 .txt */ done(); toast('選 Google Drive →「記帳備份」資料夾 → 儲存'); return; }
   } catch (e) { if (e.name === 'AbortError') return; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
   done(); toast('已下載備份檔');
