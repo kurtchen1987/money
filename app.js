@@ -731,6 +731,8 @@ function parsePaste(text) {
     if (!date) r.err = '日期看不懂'; else if (!a) r.err = `找不到帳戶「${f[1] || ''}」`; else if (!amount) r.err = '金額看不懂';
     if (r.err) r.on = false;
     else r.dup = D.tx.some(t => t.kind === 'expense' && t.from === r.from && t.date === r.date && Math.abs(+t.amount) === Math.abs(r.amount));
+    // 同一次貼上的資料裡也檢查：多張截圖重疊時，同日期＋同帳戶＋同金額＋同店家只留第一筆
+    if (!r.err && !r.dup && rows.some(x => !x.err && x.date === r.date && x.from === r.from && x.amount === r.amount && normName(x.note) === normName(r.note))) r.dup = 'batch';
     if (r.dup) r.on = false;
     rows.push(r);
   }
@@ -744,12 +746,12 @@ function drawPaste() {
     <div class="row" style="margin-top:10px"><button class="btn ghost" style="margin:0" data-act="paste-clip">從剪貼簿貼上</button><button class="btn" style="margin:0" data-act="paste-parse">下一步：預覽</button></div>`;
   } else {
     const ok = PI.rows.filter(r => r.on), tot = sum(ok, r => r.amount);
-    h += `<p class="muted" style="margin-top:6px">打勾的會匯入。「可能重複」是同一天、同帳戶、同金額已經記過的，預設不勾</p><div class="card tight">`;
+    h += `<p class="muted" style="margin-top:6px">打勾的會匯入。標「已經記過」或「截圖重疊」的預設不勾；真的是兩筆一樣的消費（例如同一天買兩杯一樣的咖啡），自己勾回來就好</p><div class="card tight">`;
     PI.rows.forEach((r, i) => {
       h += `<div class="item" style="align-items:flex-start"><input type="checkbox" style="width:auto;margin-top:4px" data-pi="${i}" data-pf="on" ${r.on ? 'checked' : ''} ${r.err ? 'disabled' : ''}>
       <div class="grow">${r.err ? `<div class="muted small">${esc(r.raw)}</div><span class="tag red">${esc(r.err)}</span>` : `
         <div class="row"><span>${md(r.date)}・${esc(accName(r.from))}</span><b>${r.amount < 0 ? '退款 ' : ''}${fmt(Math.abs(r.amount))}</b></div>
-        <div class="muted small">${esc(r.note)}${r.dup ? ' <span class="tag amber">可能重複</span>' : ''}</div>
+        <div class="muted small">${esc(r.note)}${r.dup === 'batch' ? ' <span class="tag amber">跟上面重複（截圖重疊）</span>' : r.dup ? ' <span class="tag amber">已經記過</span>' : ''}</div>
         <div class="row" style="margin-top:6px;gap:6px"><select data-pi="${i}" data-pf="category" style="padding:6px 8px;font-size:13px">${C.categories.map(c => `<option ${c.name === r.category ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}${C.categories.some(c => c.name === r.category) ? '' : `<option selected>${esc(r.category)}</option>`}</select>
         ${acc(r.from).type === 'card' ? `<label class="small" style="display:flex;gap:4px;align-items:center;white-space:nowrap"><input type="checkbox" style="width:auto" data-pi="${i}" data-pf="nextCycle" ${r.nextCycle ? 'checked' : ''}>⏭️ 下一期</label>` : ''}</div>`}
       </div></div>`;
