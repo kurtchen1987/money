@@ -141,3 +141,20 @@ body.adv .toast{background:#fffdf4;color:#262626;border:3px solid #262626;border
 body.adv input,body.adv select,body.adv textarea{border:2px solid #262626;border-radius:6px}
 body.adv .mascot{display:inline-block;vertical-align:middle;margin-right:6px}
 body:not(.adv) .mascot{display:none}
+
+/* ===== 存錢罐達成獎勵畫面 ===== */
+.reward{position:fixed;inset:0;z-index:50;background:rgba(20,24,40,.82);display:flex;align-items:center;justify-content:center;padding:20px;overflow:hidden;font-family:"DotGothic16","PingFang TC","WenQuanYi Zen Hei",monospace}
+.confetti i{position:absolute;top:-20px;width:10px;height:10px;animation:fall linear infinite}
+@keyframes fall{to{transform:translateY(110vh) rotate(540deg)}}
+.reward-box{position:relative;background:#fffdf4;color:#262626;border:4px solid #262626;border-radius:10px;box-shadow:6px 6px 0 #ffd84a;width:100%;max-width:340px;padding:18px;text-align:center;animation:pop .4s steps(4)}
+@keyframes pop{from{transform:scale(.3)}to{transform:scale(1)}}
+.lvl{font-size:30px;font-weight:700;color:#e8473d;text-shadow:3px 3px 0 #ffd84a;letter-spacing:2px;animation:advblink2 .6s steps(2) 4}
+@keyframes advblink2{50%{opacity:.2}}
+.jump{margin:6px 0;animation:jump .6s steps(3) infinite alternate}
+.jump .mascot{display:inline-block!important;margin:0}
+@keyframes jump{to{transform:translateY(-14px)}}
+.rt{font-size:22px;font-weight:700;margin:4px 0 10px;line-height:1.3}
+.rs{border:3px solid #262626;border-radius:8px;padding:8px 12px;text-align:left;background:#fff}
+.rs .row{padding:3px 0;font-size:15px}
+.rw{margin-top:10px;background:#fff1cc;border:3px solid #262626;border-radius:8px;padding:8px;font-size:15px}
+.reward .btn{border:3px solid #262626;box-shadow:0 4px 0 #262626;background:#e8473d;color:#fff;font-family:inherit}

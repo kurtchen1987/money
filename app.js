@@ -363,7 +363,7 @@ V.home = () => {
   h += `<a class="card" href="#jars" style="display:block"><div class="row"><b>🐷 存錢罐</b><span class="muted">這期存了 ${fmt(B.saved)} ›</span></div>`;
   for (const j of C.jars) {
     const v = jb[j.id] || 0, pct = j.target > 0 ? Math.min(100, v / j.target * 100) : 0;
-    h += `<div class="row" style="margin-top:10px"><span>${esc(j.emoji)} ${esc(j.name)}</span><span class="muted">${fmt(v)}${j.target > 0 ? ' / ' + fmt(j.target) : ''}</span></div>${j.target > 0 ? `<div class="bar"><i style="width:${pct}%;background:${esc(j.color)}"></i></div>` : ''}`;
+    h += `<div class="row" style="margin-top:10px"><span>${esc(j.emoji)} ${esc(j.name)}${j.achievedAt ? ' 🏆' : ''}</span><span class="muted">${fmt(v)}${j.target > 0 ? ' / ' + fmt(j.target) : ''}</span></div>${j.target > 0 ? `<div class="bar"><i style="width:${pct}%;background:${esc(j.color)}"></i></div>` : ''}`;
   }
   h += `</a>`;
   // 刷卡
@@ -526,7 +526,7 @@ V.jars = () => {
         hint = `<span class="muted">還差 ${fmt(gap)}，離目標還有 ${months} 個月（平均每月約 ${fmt(Math.ceil(gap / months / 100) * 100)}）</span>`;
       } else hint = `<span class="muted">還差 ${fmt(gap)}</span>`;
     }
-    h += `<div class="card"><div class="row"><b>${esc(j.emoji)} ${esc(j.name)}</b><a class="muted" data-act="jar-edit" data-id="${j.id}">編輯 ›</a></div>
+    h += `<div class="card"><div class="row"><b>${esc(j.emoji)} ${esc(j.name)}${j.achievedAt ? ` <a class="tag amber" data-act="reward-show" data-id="${j.id}">🏆 ${md(j.achievedAt)} 達成</a>` : ''}</b><a class="muted" data-act="jar-edit" data-id="${j.id}">編輯 ›</a></div>${j.reward ? `<div class="muted small">🎁 獎勵：${esc(j.reward)}</div>` : ''}
       ${j.target > 0 ? `<div class="bar"><i style="width:${pct}%;background:${esc(j.color)}"></i></div>` : ''}
       <div class="row"><span><b>${fmt(v)}</b>${j.target > 0 ? ` <span class="muted">/ ${fmt(j.target)}</span>` : ''}</span>${j.target > 0 ? `<span class="muted">${Math.round(pct)}%</span>` : ''}</div>
       <div style="margin-top:4px">${hint}${j.targetDate ? ` <span class="muted">・目標 ${esc(j.targetDate.replace('-', '/'))}</span>` : ''}</div></div>`;
@@ -658,6 +658,40 @@ function ask(title, fields, okText = '確定') {
     f.addEventListener('submit', e => { e.preventDefault(); const o = {}; for (const el of f.elements) if (el.name) o[el.name] = el.type === 'checkbox' ? el.checked : el.value; modalCtx = null; closeSheet(); res(o); });
     setTimeout(() => { const first = f.querySelector('input'); if (first && first.type !== 'date') first.focus(); }, 50);
   });
+}
+
+// ---------- 存錢罐達成獎勵 ----------
+function checkJarGoals() {
+  const jb = jarBalances(), hit = [];
+  for (const j of C.jars) {
+    if (j.target > 0 && (jb[j.id] || 0) >= j.target && !j.achievedAt) {
+      const first = D.tx.filter(t => t.kind === 'jar' && t.jar === j.id && t.amount > 0).sort((a, b) => a.date < b.date ? -1 : 1)[0];
+      j.achievedAt = TODAY; j.startedAt = first ? first.date : TODAY; hit.push(j);
+    }
+  }
+  if (hit.length) { save(); render(); celebrate(hit[0]); }
+}
+function jingle() {
+  try {
+    const A = new (window.AudioContext || window.webkitAudioContext)(), notes = [523, 659, 784, 1047, 784, 1047];
+    notes.forEach((f, i) => { const o = A.createOscillator(), g = A.createGain(); o.type = 'square'; o.frequency.value = f; g.gain.value = .06; o.connect(g); g.connect(A.destination); const t = A.currentTime + i * .12; o.start(t); g.gain.setValueAtTime(.06, t); g.gain.exponentialRampToValueAtTime(.001, t + (i === notes.length - 1 ? .5 : .11)); o.stop(t + .55); });
+  } catch (e) { }
+}
+function celebrate(j) {
+  const days = Math.max(1, diff(j.startedAt || j.achievedAt, j.achievedAt) + 1), jb = jarBalances();
+  let conf = '';
+  for (let i = 0; i < 40; i++) conf += `<i style="left:${(i * 37) % 100}%;background:${['#ffd84a', '#e8473d', '#3b74d1', '#3fb04a', '#f6a6b8'][i % 5]};animation-delay:${(i % 10) * .12}s;animation-duration:${1.8 + (i % 4) * .4}s"></i>`;
+  const el = document.createElement('div');
+  el.className = 'reward';
+  el.innerHTML = `<div class="confetti">${conf}</div><div class="reward-box">
+    <div class="lvl">LEVEL UP!</div>
+    <div class="jump">${MASCOT.replace('width="42" height="33"', 'width="112" height="88"')}</div>
+    <div class="rt">${esc(j.emoji)} ${esc(j.name)}<br>存滿了！</div>
+    <div class="rs"><div class="row"><span>存到</span><b>${fmt(jb[j.id] || 0)}</b></div><div class="row"><span>目標</span><b>${fmt(j.target)}</b></div><div class="row"><span>花了</span><b>${days} 天</b></div>${j.targetDate ? `<div class="row"><span>預定</span><b>${esc(j.targetDate.replace('-', '/'))}</b></div>` : ''}</div>
+    ${j.reward ? `<div class="rw">🎁 獎勵自己：<b>${esc(j.reward)}</b></div>` : ''}
+    <button class="btn" data-act="reward-close">太棒了！ ▶</button></div>`;
+  document.body.appendChild(el);
+  jingle();
 }
 
 // ---------- 記一筆 ----------
@@ -896,9 +930,11 @@ document.addEventListener('click', async e => {
         if (delta) { D.tx.push({ id: uid(), date, kind: 'jar', jar: j.id, amount: delta, note: '輸入目前金額', noAcct: true, opening: true }); n++; }
       }
       D.recon.last = TODAY;
-      save(); location.hash = '#acct'; toast(n ? `已更新 ${n} 個帳戶` : '沒有變動'); break;
+      save(); location.hash = '#acct'; toast(n ? `已更新 ${n} 個帳戶` : '沒有變動'); checkJarGoals(); break;
     }
     case 'pk': statsKey = k; render(); break;
+    case 'reward-close': el.closest('.reward').remove(); break;
+    case 'reward-show': celebrate(C.jars.find(x => x.id === el.dataset.id)); break;
     case 'recon': {
       const a = acc(el.dataset.id), bal = balances();
       const r = await ask(`${esc(a.name)} 對帳`, [{ label: `App 算的是 ${fmt(bal[a.id])}，銀行／錢包實際是多少？${a.type === 'card' ? '（信用卡請輸入負數，例如還欠 3,000 就輸入 -3000）' : ''}`, name: 'v', type: 'number', value: bal[a.id] }], '對帳');
@@ -925,18 +961,20 @@ document.addEventListener('click', async e => {
         const ex = { id: uid(), date, kind: 'expense', from: '', amount: v, category: r.cat, note: j.name, jar: j.id };
         D.tx.push(ex, { id: uid(), date, kind: 'jar', jar: j.id, amount: -v, note: `拿出來用：${r.cat}`, link: ex.id, noAcct: true });
       } else D.tx.push({ id: uid(), date, kind: 'jar', jar: j.id, amount: out ? -v : v, note: out ? `轉回 ${sv}` : `從 ${sv} 存進去` });
-      save(); render(); toast(`${j.emoji} ${out ? '拿出' : '存入'} ${fmt(v)}`); break;
+      save(); render(); toast(`${j.emoji} ${out ? '拿出' : '存入'} ${fmt(v)}`); if (!out) checkJarGoals(); break;
     }
     case 'jar-edit': {
       const j = C.jars.find(x => x.id === el.dataset.id);
       const r = await ask('編輯存錢罐', [
         { label: '圖示（一個表情符號）', name: 'emoji', value: j.emoji }, { label: '名稱', name: 'name', value: j.name },
         { label: '目標金額（0＝不設）', name: 'target', type: 'number', value: j.target }, { label: '目標年月（可不設）', name: 'targetDate', type: 'month', value: j.targetDate },
+        { label: '🎁 存滿後獎勵自己什麼（可不填，例如：新的舉重鞋）', name: 'reward', value: j.reward || '' },
         { label: '顏色', name: 'color', html: `<select name="color">${COLORS.slice(0, 6).map((c, i) => `<option value="${c}" ${c === j.color ? 'selected' : ''}>${['綠', '藍', '橘', '紅', '紫', '青'][i]}</option>`).join('')}</select>` }
       ], '儲存');
       if (!r) break;
-      Object.assign(j, { emoji: r.emoji || j.emoji, name: r.name || j.name, target: +r.target || 0, targetDate: r.targetDate || '', color: r.color });
-      save(); render(); break;
+      if ((+r.target || 0) !== j.target) { delete j.achievedAt; delete j.startedAt; }
+      Object.assign(j, { emoji: r.emoji || j.emoji, name: r.name || j.name, target: +r.target || 0, targetDate: r.targetDate || '', color: r.color, reward: (r.reward || '').trim() });
+      save(); render(); checkJarGoals(); break;
     }
     case 'ed': openEditor(el.dataset.type, +el.dataset.i); break;
     case 'ed-new': openEditor(el.dataset.type, null); break;
