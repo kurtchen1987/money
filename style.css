@@ -68,7 +68,7 @@ h2{font-size:16px;margin:18px 0 8px}
 .link{color:var(--brand);font-weight:600}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:20;display:flex;align-items:flex-end;justify-content:center}
 .modal[hidden]{display:none}
-.sheet{background:var(--bg);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
+.sheet{background:var(--bg);width:100%;max-width:560px;max-height:92%;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
 .sheet .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 .field{margin-top:12px}
 .field label{display:block;font-size:13px;color:var(--sub);margin-bottom:4px}
@@ -78,7 +78,7 @@ input[type=range]{padding:0;border:0;background:transparent;accent-color:var(--b
 .txrow{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .txrow:last-child{border-bottom:0}
 .emoji{font-size:20px;width:28px;text-align:center}
-.addsheet{max-height:100vh;border-radius:0;padding-top:calc(10px + env(safe-area-inset-top))}
+.addsheet{max-height:100%;height:100%;border-radius:0;padding-top:calc(12px + env(safe-area-inset-top))}
 .addsheet .bigamt{font-size:38px;margin:8px 0 2px}
 .addsheet .field{margin-top:8px}
 .addsheet .chip{padding:6px 11px;font-size:13px}

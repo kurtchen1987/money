@@ -657,6 +657,7 @@ function drawAdd() {
   const accs = (types) => C.accounts.filter(a => !types || types.includes(a.type));
   let h = `<div class="head"><a class="muted" data-act="close">取消</a><b>記一筆</b><a class="link" data-act="paste">📋 貼上匯入</a></div>
   <div class="seg">${[['expense', '支出'], ['withdraw', '領現金'], ['income', '收入'], ['transfer', '互轉'], ['invest', '投資']].map(([v, l]) => `<button class="${m === v ? 'on' : ''}" data-act="ae-mode" data-v="${v}">${l}</button>`).join('')}</div>
+  <button class="btn ghost sm" style="display:block;width:100%;margin-top:8px" data-act="paste">📋 從截圖文字貼上匯入（多筆）</button>
   <div class="bigamt">$ ${AE.amount ? fmt(+AE.amount) : '0'}</div>
   <div class="muted" style="text-align:center"><input type="date" value="${AE.date}" data-ae="date" style="width:auto;display:inline-block;padding:4px 8px;font-size:13px"></div>`;
   if (m === 'expense' || m === 'invest') {
