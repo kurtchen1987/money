@@ -631,7 +631,10 @@ function openEditor(type, i) {
 
 // ---------- 彈出視窗 ----------
 let modalCtx = null;
-function sheet(html, cls = '') { const m = $('#modal'), keep = cls && m.firstChild && m.firstChild.classList.contains(cls) ? m.firstChild.scrollTop : 0; m.innerHTML = `<div class="sheet ${cls}">${html}</div>`; m.hidden = false; m.firstChild.scrollTop = keep; }
+function sheet(html, cls = '') {
+  const m = $('#modal'), same = cls && m.firstChild && m.firstChild.classList.contains(cls), keep = same ? m.firstChild.scrollTop : 0, mid = same && m.querySelector('.ae-mid') ? m.querySelector('.ae-mid').scrollTop : 0;
+  m.innerHTML = `<div class="sheet ${cls}">${html}</div>`; m.hidden = false; m.firstChild.scrollTop = keep; const nm = m.querySelector('.ae-mid'); if (nm) nm.scrollTop = mid;
+}
 function closeSheet() { $('#modal').hidden = true; $('#modal').innerHTML = ''; modalCtx = null; }
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeSheet(); });
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2200); }
@@ -655,11 +658,9 @@ function openAdd(preset = {}) {
 function drawAdd() {
   const m = AE.mode, chip = (val, cur, label, act) => `<button class="chip ${val === cur ? 'on' : ''}" data-act="${act}" data-v="${esc(val)}">${label}</button>`;
   const accs = (types) => C.accounts.filter(a => !types || types.includes(a.type));
-  let h = `<div class="head"><a class="muted" data-act="close">取消</a><b>記一筆</b><a class="link" data-act="paste">📋 貼上匯入</a></div>
+  let h = `<div class="ae-top"><div class="head"><a class="muted" data-act="close">取消</a><b>記一筆</b><a class="link" data-act="paste">📋 貼上匯入</a></div>
   <div class="seg">${[['expense', '支出'], ['withdraw', '領現金'], ['income', '收入'], ['transfer', '互轉'], ['invest', '投資']].map(([v, l]) => `<button class="${m === v ? 'on' : ''}" data-act="ae-mode" data-v="${v}">${l}</button>`).join('')}</div>
-  <button class="btn ghost sm" style="display:block;width:100%;margin-top:8px" data-act="paste">📋 從截圖文字貼上匯入（多筆）</button>
-  <div class="bigamt">$ ${AE.amount ? fmt(+AE.amount) : '0'}</div>
-  <div class="muted" style="text-align:center"><input type="date" value="${AE.date}" data-ae="date" style="width:auto;display:inline-block;padding:4px 8px;font-size:13px"></div>`;
+  <div class="row ae-amt"><div class="bigamt">$ ${AE.amount ? fmt(+AE.amount) : '0'}</div><input type="date" value="${AE.date}" data-ae="date"></div></div><div class="ae-mid">`;
   if (m === 'expense' || m === 'invest') {
     h += `<div class="field"><label>從哪裡付</label><div class="chips">${accs(['cash', 'card', 'bank']).map(a => chip(a.id, AE.from, `${a.type === 'cash' ? '👛 ' : a.type === 'card' ? '💳 ' : ''}${esc(a.name)}`, 'ae-from')).join('')}</div></div>`;
   }
@@ -669,7 +670,7 @@ function drawAdd() {
   }
   if (m === 'expense') {
     h += `<div class="field"><label>類別（點一下就選好）</label><div class="chips">${C.categories.map(c => chip(c.name, AE.category, `${esc(c.emoji)} ${esc(c.name)}`, 'ae-cat')).join('')}</div></div>`;
-    h += `<div class="field"><label>直接從分割帳戶（罐子）付（可不選，選了就不扣上面的帳戶）</label><div class="chips">${chip('', AE.jar, '不是', 'ae-jar')}${C.jars.map(j => chip(j.id, AE.jar, `${esc(j.emoji)} ${esc(j.name)}`, 'ae-jar')).join('')}</div></div>`;
+    h += `<div class="field"><label>🐷 從罐子付（可不選）</label><div class="chips">${chip('', AE.jar, '不是', 'ae-jar')}${C.jars.map(j => chip(j.id, AE.jar, `${esc(j.emoji)} ${esc(j.name)}`, 'ae-jar')).join('')}</div></div>`;
   }
   if (m === 'withdraw' || m === 'transfer') {
     h += `<div class="field"><label>從哪個帳戶</label><div class="chips">${accs(['bank']).map(a => chip(a.id, AE.from, esc(a.name), 'ae-from')).join('')}</div></div>`;
@@ -681,9 +682,9 @@ function drawAdd() {
     h += `<div class="field"><label>進哪個帳戶</label><div class="chips">${accs(['bank', 'cash']).map(a => chip(a.id, AE.to, esc(a.name), 'ae-to')).join('')}</div></div>
     <div class="field"><label>類別</label><div class="chips">${['差旅', '其他收入'].map(c => chip(c, AE.category, `${SYS_CATS[c]} ${c}`, 'ae-cat')).join('')}</div></div>`;
   }
-  h += `<div class="field"><input placeholder="備註（可不填）" value="${esc(AE.note)}" data-ae="note"></div>
-  <div class="keys">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '⌫'].map(x => `<button data-act="key" data-v="${x}">${x}</button>`).join('')}</div>
-  <button class="btn" data-act="ae-save">儲存</button>`;
+  h += `<div class="field"><input placeholder="備註（可不填）" value="${esc(AE.note)}" data-ae="note"></div></div>
+  <div class="ae-bot"><div class="keys">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', '⌫'].map(x => `<button data-act="key" data-v="${x}">${x}</button>`).join('')}</div>
+  <button class="btn" data-act="ae-save">儲存</button></div>`;
   sheet(h, 'addsheet');
 }
 function saveAdd() {
@@ -762,7 +763,7 @@ function drawPaste() {
     });
     h += `</div><button class="btn" data-act="paste-go">匯入 ${ok.length} 筆（共 ${fmt(tot)}）</button><button class="btn ghost" data-act="paste-back">回上一步</button>`;
   }
-  sheet(h, 'addsheet');
+  sheet(h, 'fullsheet');
 }
 
 // ---------- 交易編輯 ----------

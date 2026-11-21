@@ -78,9 +78,18 @@ input[type=range]{padding:0;border:0;background:transparent;accent-color:var(--b
 .txrow{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .txrow:last-child{border-bottom:0}
 .emoji{font-size:20px;width:28px;text-align:center}
-.addsheet{max-height:100%;height:100%;border-radius:0;padding-top:calc(12px + env(safe-area-inset-top))}
-.addsheet .bigamt{font-size:38px;margin:8px 0 2px}
+.addsheet,.fullsheet{max-height:100%;height:100%;border-radius:0;padding-top:calc(12px + env(safe-area-inset-top))}
+.addsheet{display:flex;flex-direction:column;overflow:hidden;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+.ae-top{flex:none}
+.ae-mid{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.ae-bot{flex:none;padding-top:6px}
+.ae-amt{margin-top:8px}
+.ae-amt .bigamt{font-size:34px;margin:0;text-align:left}
+.ae-amt input[type=date]{width:auto;padding:6px 8px;font-size:13px}
 .addsheet .field{margin-top:8px}
 .addsheet .chip{padding:6px 11px;font-size:13px}
-.addsheet .keys button{padding:9px 0;font-size:19px}
-.addsheet .btn{margin-top:8px}
+.addsheet .keys{margin-top:0;gap:5px}
+.addsheet .keys button{padding:8px 0;font-size:19px}
+.addsheet .btn{margin-top:6px;padding:11px}
+@media (max-height:700px){.addsheet .keys button{padding:6px 0;font-size:17px}.ae-amt .bigamt{font-size:28px}}
+.item>.grow,.txrow>.grow{overflow-wrap:anywhere}
