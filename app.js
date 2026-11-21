@@ -719,6 +719,9 @@ function parseDate(x) {
   if (m) { let y = +TODAY.slice(0, 4), s = `${y}-${pad(+m[1])}-${pad(+m[2])}`; if (s > addDays(TODAY, 1)) s = `${y - 1}-${pad(+m[1])}-${pad(+m[2])}`; return s; }
   return null;
 }
+// 分期：備註裡的「3/12期」「第3期」，期數不同就不算重複
+function instNo(note) { const m = String(note || '').match(/(\d+)\s*[\/／]\s*(\d+)\s*期|第\s*(\d+)\s*期/); return m ? (m[1] ? `${m[1]}/${m[2]}` : m[3]) : null; }
+const sameInst = (a, b) => instNo(a) === instNo(b);
 function parsePaste(text) {
   const rows = [];
   for (let line of String(text).split(/\r?\n/)) {
@@ -730,7 +733,7 @@ function parsePaste(text) {
     const r = { raw: line, date, from: a ? a.id : '', amount, category: cat, note: f[4] || '', nextCycle: /下一期/.test(f[5] || ''), on: true, err: '' };
     if (!date) r.err = '日期看不懂'; else if (!a) r.err = `找不到帳戶「${f[1] || ''}」`; else if (!amount) r.err = '金額看不懂';
     if (r.err) r.on = false;
-    else r.dup = D.tx.some(t => t.kind === 'expense' && t.from === r.from && t.date === r.date && Math.abs(+t.amount) === Math.abs(r.amount));
+    else r.dup = D.tx.some(t => t.kind === 'expense' && t.from === r.from && t.date === r.date && Math.abs(+t.amount) === Math.abs(r.amount) && sameInst(t.note, r.note));
     // 同一次貼上的資料裡也檢查：多張截圖重疊時，同日期＋同帳戶＋同金額＋同店家只留第一筆
     if (!r.err && !r.dup && rows.some(x => !x.err && x.date === r.date && x.from === r.from && x.amount === r.amount && normName(x.note) === normName(r.note))) r.dup = 'batch';
     if (r.dup) r.on = false;
