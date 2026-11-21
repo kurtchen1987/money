@@ -314,11 +314,15 @@ V.home = () => {
   const jt = sum(C.jars, j => jarBalances()[j.id] || 0);
   const bal = balances(), shown = C.accounts.filter(a => a.type !== 'cash');
   if (shown.length) {
-    h += `<h2>帳戶餘額</h2><a class="grid3" href="#acct">${shown.map(a => {
-      const isSv = a.id === C.savings && C.jars.length, v = a.type === 'card' ? -bal[a.id] : bal[a.id] + (isSv ? jt : 0);
-      const sub = a.type === 'card' ? (v < 0 ? '溢繳' : '未繳') : isSv ? `含罐子 ${fmt(jt)}` : '';
-      return `<div class="card" style="margin:0;padding:10px"><div class="muted small">${a.type === 'card' ? '💳 ' : ''}${esc(a.name)}</div><div style="font-weight:700;font-size:16px;margin-top:2px;${v < 0 && a.type !== 'card' ? 'color:var(--red)' : ''}">${fmt(a.type === 'card' ? Math.abs(v) : v)}</div>${sub ? `<div class="muted small">${sub}</div>` : ''}</div>`;
-    }).join('')}</a>`;
+    const tile = (label, v, sub, red) => `<div class="card" style="margin:0;padding:10px"><div class="muted small">${label}</div><div style="font-weight:700;font-size:16px;margin-top:2px;${red ? 'color:var(--red)' : ''}">${fmt(v)}</div>${sub ? `<div class="muted small">${sub}</div>` : ''}</div>`;
+    const tiles = [];
+    for (const a of shown) {
+      if (a.type === 'card') { const v = -bal[a.id]; tiles.push(tile(`💳 ${esc(a.name)}`, Math.abs(v), v < 0 ? '溢繳' : '未繳')); continue; }
+      const isSv = a.id === C.savings && C.jars.length;
+      tiles.push(tile(esc(a.name), bal[a.id], isSv ? '可用餘額' : '', bal[a.id] < 0));
+      if (isSv) tiles.push(tile(`🐷 ${esc(a.name)} 罐子`, jt, `${C.jars.length} 個分割帳戶`));
+    }
+    h += `<h2>帳戶餘額</h2><a class="grid3" href="#acct">${tiles.join('')}</a>`;
   }
   // 存錢罐
   const jb = jarBalances();
