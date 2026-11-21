@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v20';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v21';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -839,6 +839,7 @@ function parsePaste(text) {
     if (!r.err && instNo(r.note) && diff(r.date, TODAY) > 45) { r.origDate = r.date; r.date = TODAY; }
     if (r.err) r.on = false;
     else r.dup = D.tx.some(t => t.kind === 'expense' && t.from === r.from && t.date === r.date && Math.abs(+t.amount) === Math.abs(r.amount) && sameInst(t.note, r.note));
+    if (!r.err && !r.dup) { const near = D.tx.find(t => t.kind === 'expense' && t.from === r.from && Math.abs(+t.amount) === Math.abs(r.amount) && Math.abs(diff(t.date, r.date)) <= 5 && sameInst(t.note, r.note)); if (near) { r.dup = 'near'; r.nearDate = near.date; r.nearNote = near.note || near.category; } }
     // 同一次貼上的資料裡也檢查：多張截圖重疊時，同日期＋同帳戶＋同金額＋同店家只留第一筆
     if (!r.err && !r.dup && rows.some(x => !x.err && x.date === r.date && x.from === r.from && x.amount === r.amount && normName(x.note) === normName(r.note))) r.dup = 'batch';
     if (r.dup) r.on = false;
@@ -859,7 +860,7 @@ function drawPaste() {
       h += `<div class="item" style="align-items:flex-start"><input type="checkbox" style="width:auto;margin-top:4px" data-pi="${i}" data-pf="on" ${r.on ? 'checked' : ''} ${r.err ? 'disabled' : ''}>
       <div class="grow">${r.err ? `<div class="muted small">${esc(r.raw)}</div><span class="tag red">${esc(r.err)}</span>` : `
         <div class="row"><span><input type="date" value="${r.date}" data-pi="${i}" data-pf="date" style="width:auto;padding:3px 6px;font-size:13px"> ${esc(accName(r.from))}</span><b>${r.amount < 0 ? '退款 ' : ''}${fmt(Math.abs(r.amount))}</b></div>${r.origDate ? `<div class="small" style="color:var(--blue)">📅 分期：截圖上的 ${md(r.origDate)} 是當初刷卡日，已改成今天（算這期新刷）・${(() => { const c = cardOf(r.from); return c ? `<a class="link" data-act="pi-date" data-i="${i}" data-v="${cardStatus(c).lastClose}">改到上期帳單（${md(cardStatus(c).lastClose)}）</a>・` : ''; })()}<a class="link" data-act="pi-date" data-i="${i}" data-v="${r.origDate}">用原始日期</a></div>` : ''}${!r.origDate && diff(r.date, TODAY) > 45 ? `<div class="small" style="color:var(--amber)">⚠️ 這是 ${diff(r.date, TODAY)} 天前的日期，會算進很久以前的帳單</div>` : ''}
-        <div class="muted small">${esc(r.note)}${r.dup === 'batch' ? ' <span class="tag amber">跟上面重複（截圖重疊）</span>' : r.dup ? ' <span class="tag amber">已經記過</span>' : ''}</div>
+        <div class="muted small">${esc(r.note)}${r.dup === 'batch' ? ' <span class="tag amber">跟上面重複（截圖重疊）</span>' : r.dup === 'near' ? ` <span class="tag amber">${md(r.nearDate)} 記過一樣金額的「${esc(r.nearNote)}」</span>` : r.dup ? ' <span class="tag amber">已經記過</span>' : ''}</div>
         <div class="row" style="margin-top:6px;gap:6px"><select data-pi="${i}" data-pf="category" style="padding:6px 8px;font-size:13px">${C.categories.map(c => `<option ${c.name === r.category ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}${C.categories.some(c => c.name === r.category) ? '' : `<option selected>${esc(r.category)}</option>`}</select>
         ${acc(r.from).type === 'card' ? `<label class="small" style="display:flex;gap:4px;align-items:center;white-space:nowrap"><input type="checkbox" style="width:auto" data-pi="${i}" data-pf="nextCycle" ${r.nextCycle ? 'checked' : ''}>⏭️ 下一期</label>` : ''}</div>`}
       </div></div>`;
