@@ -2,7 +2,7 @@
 /* 錢錢管家：資料只存在這支手機的瀏覽器裡（localStorage），程式本身不含任何個人金額。 */
 
 // ---------- 小工具 ----------
-const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v16';
+const KEY = 'money.v1', CAL_KEY = 'money.cal', APP_VER = 'v17';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n < 0 ? '-' : '') + Math.abs(Math.round(n || 0)).toLocaleString('en-US');
@@ -300,7 +300,7 @@ function render() {
   applyTheme();
   route = (location.hash || '#home').slice(1) || 'home';
   const base = route.split('/')[0];
-  document.querySelectorAll('.tabs [data-tab]').forEach(a => a.classList.toggle('on', a.dataset.tab === (base.startsWith('set') || base === 'jars' ? (base === 'jars' ? 'home' : 'acct') : base)));
+  document.querySelectorAll('.tabs [data-tab]').forEach(a => a.classList.toggle('on', a.dataset.tab === (base.startsWith('set') || base === 'jars' || base === 'card' ? (base === 'jars' || base === 'card' ? 'home' : 'acct') : base)));
   const fn = V[base] || V.home;
   $('#view').innerHTML = fn(route.split('/').slice(1));
 }
@@ -353,14 +353,14 @@ V.home = () => {
         const card = cardOf(a.id);
         if (!card) { const v = -bal[a.id]; tiles.push(tile(`💳 ${esc(a.name)}`, Math.abs(v), v < 0 ? '溢繳' : '未繳')); continue; }
         const st = cardStatus(card);
-        tiles.push(tile(`💳 ${esc(a.name)}`, st.paid ? 0 : st.bill, st.paid ? `${md(st.lastClose)} 帳單已繳・新刷 ${fmt(st.newSpend)}` : `${st.filled ? '待繳' : '待繳（估）'}${st.payDate ? ' ' + md(st.payDate) + ' 扣' : ''}・新刷 ${fmt(st.newSpend)}`));
+        tiles.push(`<a href="#card/${a.id}/-1" style="display:contents">` + tile(`💳 ${esc(a.name)} ›`, st.paid ? 0 : st.bill, st.paid ? `${md(st.lastClose)} 帳單已繳・新刷 ${fmt(st.newSpend)}` : `${st.filled ? '待繳' : '待繳（估）'}${st.payDate ? ' ' + md(st.payDate) + ' 扣' : ''}・新刷 ${fmt(st.newSpend)}`) + '</a>');
         continue;
       }
       const isSv = a.id === C.savings && C.jars.length;
       tiles.push(tile(esc(a.name), bal[a.id], isSv ? '可用餘額' : '', bal[a.id] < 0));
       if (isSv) tiles.push(tile(`🐷 ${esc(a.name)} 罐子`, jt, `${C.jars.length} 個分割帳戶`));
     }
-    h += `<h2>帳戶餘額</h2><a class="grid3" href="#acct">${tiles.join('')}</a>`;
+    h += `<h2>帳戶餘額</h2><div class="grid3">${tiles.join('')}</div>`;
   }
   // 存錢罐
   const jb = jarBalances();
@@ -376,7 +376,7 @@ V.home = () => {
     for (const card of C.cards) {
       const cy = cycle(card), pct = card.alert ? cy.spend / card.alert * 100 : 0;
       const cls = pct > 100 ? 'red' : pct >= 80 ? 'amber' : '', tag = pct > 100 ? '<span class="tag red">超過示警值</span>' : pct >= 80 ? '<span class="tag amber">快到示警值</span>' : '<span class="tag">安全</span>';
-      h += `<a class="card" href="#set-cards"><b>💳 ${esc(accName(card.id))}</b><div class="muted">${md(cy.start)}–${md(cy.end)}</div><div class="bar ${cls}"><i style="width:${Math.min(100, pct)}%"></i></div><div class="row"><b>${fmt(cy.spend)}</b><span class="muted">/ ${fmt(card.alert)}</span></div>${tag}</a>`;
+      h += `<a class="card" href="#card/${card.id}/0"><b>💳 ${esc(accName(card.id))} ›</b><div class="muted">${md(cy.start)}–${md(cy.end)}</div><div class="bar ${cls}"><i style="width:${Math.min(100, pct)}%"></i></div><div class="row"><b>${fmt(cy.spend)}</b><span class="muted">/ ${fmt(card.alert)}</span></div>${tag}</a>`;
     }
     h += `</div>`;
   }
@@ -562,6 +562,31 @@ V['set-bal'] = () => {
   ${C.jars.length ? `<h2 style="margin-top:14px">${esc(accName(C.savings))} 分割帳戶（存錢罐）</h2>${C.jars.map(j => `<div class="field"><label>${esc(j.emoji)} ${esc(j.name)}</label><input name="jar_${j.id}" type="number" inputmode="numeric" value="${jb[j.id] || 0}" data-was="${jb[j.id] || 0}"></div>`).join('')}` : ''}
   <div class="field"><label>以哪天為準</label><input name="__date" type="date" value="${TODAY}"></div></div>
   <button class="btn" data-act="bal-save">儲存</button></form>`;
+};
+
+// 信用卡刷卡明細：offset 0＝這期（還沒結帳），-1＝上期帳單…
+function cardCycle(card, offset) {
+  const cur = cycle(card), end = dateIn(nextMonth(cur.end.slice(0, 7), offset), +card.closeDay);
+  const start = addDays(dateIn(nextMonth(end.slice(0, 7), -1), +card.closeDay), 1);
+  const txs = D.tx.filter(t => t.kind === 'expense' && t.from === card.id && postDate(t) >= start && postDate(t) <= end).sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
+  return { start, end, txs, total: sum(txs, t => t.amount), key: `${card.id}|${end.slice(0, 7)}` };
+}
+V.card = ([id, off]) => {
+  const card = cardOf(id); if (!card) return '<div class="empty">找不到這張卡</div>';
+  const o = Math.min(0, +off || 0), cc = cardCycle(card, o), bill = D.bills[cc.key], closed = cc.end < TODAY;
+  const label = o === 0 ? '這期（還沒結帳）' : o === -1 ? '上期帳單' : `${-o} 期前的帳單`;
+  let h = `<div class="row"><a class="muted" href="#home">‹ 首頁</a><b>💳 ${esc(accName(id))}</b><a class="link small" href="#set-cards">示警值</a></div>
+  <div class="row" style="margin-top:12px"><a class="btn ghost sm" href="#card/${id}/${o - 1}">‹ 前一期</a><b>${label}</b>${o < 0 ? `<a class="btn ghost sm" href="#card/${id}/${o + 1}">後一期 ›</a>` : '<span style="width:70px"></span>'}</div>
+  <div class="card"><div class="muted">${md(cc.start)} – ${md(cc.end)}${closed ? ' 結帳' : ' 結帳日'}</div>
+  <div class="row" style="margin-top:6px"><span>App 記到</span><b style="font-size:22px">${fmt(cc.total)}</b></div>`;
+  if (o === 0 && card.alert) { const pct = cc.total / card.alert * 100; h += `<div class="bar ${pct > 100 ? 'red' : pct >= 80 ? 'amber' : ''}"><i style="width:${Math.min(100, pct)}%"></i></div><div class="muted small">示警值 ${fmt(card.alert)}・${Math.round(pct)}%</div>`; }
+  if (closed) {
+    h += `<div class="row" style="margin-top:8px"><span>銀行帳單</span><a class="link" data-act="bill" data-key="${esc(cc.key)}" data-spend="${cc.total}">${bill == null ? '填金額 ›' : fmt(bill) + ' ›'}</a></div>`;
+    if (bill != null && bill !== cc.total) h += `<div class="note">帳單比 App 記到的${bill > cc.total ? '多' : '少'} ${fmt(Math.abs(bill - cc.total))}，可能有漏記、多記，或該勾「下一期」的沒勾</div>`;
+  }
+  h += `</div><h2>明細（${cc.txs.length} 筆）・點一筆就能改</h2><div class="card tight">${cc.txs.length ? cc.txs.map(txRow).join('') : '<div class="empty">這期沒有刷卡紀錄</div>'}</div>
+  <button class="btn" data-act="add-card" data-id="${id}">＋ 補記一筆 ${esc(accName(id))}</button>`;
+  return h;
 };
 
 V['set-cards'] = () => {
@@ -850,6 +875,7 @@ document.addEventListener('click', async e => {
   switch (act) {
     case 'close': if (modalCtx && modalCtx.ask) modalCtx.ask(null); closeSheet(); break;
     case 'add': openAdd(); break;
+    case 'add-card': openAdd({ from: el.dataset.id }); break;
     case 'ae-mode': {
       AE.mode = el.dataset.v;
       if (AE.mode === 'withdraw' || AE.mode === 'transfer') { if (acc(AE.from).type !== 'bank') AE.from = (C.accounts.find(a => a.type === 'bank') || {}).id; }
