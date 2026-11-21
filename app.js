@@ -204,6 +204,18 @@ function cycle(card, ref = TODAY) {
   return { start, end: close, spend };
 }
 
+// 信用卡：上一次結帳的帳單（待繳）和結帳後新刷的（算下一期）分開
+function cardStatus(card) {
+  const cy = cycle(card), lastClose = addDays(cy.start, -1), key = `${card.id}|${lastClose.slice(0, 7)}`;
+  const prevStart = addDays(dateIn(nextMonth(lastClose.slice(0, 7), -1), +card.closeDay), 1);
+  const est = sum(D.tx.filter(t => t.kind === 'expense' && t.from === card.id && t.date >= prevStart && t.date <= lastClose), t => t.amount);
+  let payItem = null;
+  const k = periodOf(TODAY);
+  for (const kk of [nextMonth(k, -1), k, nextMonth(k)]) { const it = plan(kk).find(i => i.cardPay && i.to === card.id && i.billKey === key); if (it) { payItem = it; break; } }
+  const filled = D.bills[key] != null, bill = filled ? D.bills[key] : est;
+  return { key, lastClose, bill, filled, paid: !!(payItem && payItem.tx), payDate: payItem ? payItem.date : null, newSpend: cy.spend, cy };
+}
+
 // ---------- 預算：這期還能花多少 ----------
 function budget(k) {
   const items = plan(k), inP = t => periodOfTx(t) === k, P = D.periods[k] || {};
@@ -301,7 +313,8 @@ V.home = () => {
   const nk = nextMonth(k);
   if (TODAY >= dateIn(TODAY.slice(0, 7), C.salary.remindDay) && periodOf(TODAY) !== TODAY.slice(0, 7) && (D.periods[TODAY.slice(0, 7)] || {}).salary == null)
     h += `<div class="note">💰 ${+TODAY.slice(5, 7)} 月薪水快入帳了（${mdw(payday(TODAY.slice(0, 7)))}）・<a class="link" data-act="salary" data-k="${TODAY.slice(0, 7)}">先輸入金額</a></div>`;
-  for (const w of forecast())
+  const hasBal = D.tx.some(t => t.kind === 'adjust' || t.opening);
+  if (hasBal) for (const w of forecast())
     h += `<div class="warn">⚠️ ${esc(accName(w.acc))} ${md(w.date)} 要扣 ${fmt(w.total)}（${esc(w.titles.join('、'))}），餘額不足 ${fmt(w.short)}</div>`;
   for (const card of C.cards) {
     const cy = cycle(card);
@@ -317,7 +330,13 @@ V.home = () => {
     const tile = (label, v, sub, red) => `<div class="card" style="margin:0;padding:10px"><div class="muted small">${label}</div><div style="font-weight:700;font-size:16px;margin-top:2px;${red ? 'color:var(--red)' : ''}">${fmt(v)}</div>${sub ? `<div class="muted small">${sub}</div>` : ''}</div>`;
     const tiles = [];
     for (const a of shown) {
-      if (a.type === 'card') { const v = -bal[a.id]; tiles.push(tile(`💳 ${esc(a.name)}`, Math.abs(v), v < 0 ? '溢繳' : '未繳')); continue; }
+      if (a.type === 'card') {
+        const card = cardOf(a.id);
+        if (!card) { const v = -bal[a.id]; tiles.push(tile(`💳 ${esc(a.name)}`, Math.abs(v), v < 0 ? '溢繳' : '未繳')); continue; }
+        const st = cardStatus(card);
+        tiles.push(tile(`💳 ${esc(a.name)}`, st.paid ? 0 : st.bill, st.paid ? `${md(st.lastClose)} 帳單已繳・新刷 ${fmt(st.newSpend)}` : `${st.filled ? '待繳' : '待繳（估）'}${st.payDate ? ' ' + md(st.payDate) + ' 扣' : ''}・新刷 ${fmt(st.newSpend)}`));
+        continue;
+      }
       const isSv = a.id === C.savings && C.jars.length;
       tiles.push(tile(esc(a.name), bal[a.id], isSv ? '可用餘額' : '', bal[a.id] < 0));
       if (isSv) tiles.push(tile(`🐷 ${esc(a.name)} 罐子`, jt, `${C.jars.length} 個分割帳戶`));
@@ -455,7 +474,7 @@ V.acct = () => {
   for (const a of C.accounts) {
     const r = (D.recon.acc || {})[a.id];
     const ok = r && r.date === TODAY;
-    h += `<div class="item"><span class="grow"><b>${a.type === 'cash' ? '👛 ' : a.type === 'card' ? '💳 ' : ''}${esc(a.name)}</b><br><span class="muted">App 算的 ${fmt(bal[a.id])}${a.type === 'card' ? '（負數＝還沒繳的卡費）' : ''}</span></span>${ok ? `<span class="tag ${r.delta ? 'amber' : ''}">${r.delta ? `已調整 ${r.delta > 0 ? '+' : ''}${fmt(r.delta)}` : '✓ 對上了'}</span>` : `<a class="link" data-act="recon" data-id="${a.id}">輸入實際餘額 ›</a>`}</div>`;
+    h += `<div class="item"><span class="grow"><b>${a.type === 'cash' ? '👛 ' : a.type === 'card' ? '💳 ' : ''}${esc(a.name)}</b><br><span class="muted">App 算的 ${fmt(bal[a.id])}${a.type === 'card' ? '（負數＝總共欠多少：已結帳帳單＋結帳後新刷的）' : ''}</span></span>${ok ? `<span class="tag ${r.delta ? 'amber' : ''}">${r.delta ? `已調整 ${r.delta > 0 ? '+' : ''}${fmt(r.delta)}` : '✓ 對上了'}</span>` : `<a class="link" data-act="recon" data-id="${a.id}">輸入實際餘額 ›</a>`}</div>`;
   }
   h += `</div><a class="btn ghost" href="#set-bal">✏️ 一次輸入全部帳戶的目前餘額</a><h2>設定</h2><div class="card tight">
     <a class="item" href="#set-cards"><span class="grow">💳 刷卡示警</span><span class="muted">›</span></a>
