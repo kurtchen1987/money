@@ -277,12 +277,23 @@ function forecast() {
   return out;
 }
 
+// 原創像素吉祥物「錢寶」（撲滿小怪），只在冒險主題顯示
+const MASCOT = (() => {
+  const px = ['....KKKKKK....', '...KPPPPPPK...', '..KPPPPYYPPK..', '.KPPKPPPPKPPK.', 'KPPPKPPPPKPPPK', 'KPPPPPPPPPPPPK', 'KPPPPPNNPPPPPK', '.KPPPPPPPPPPK.', '..KPPPPPPPPK..', '...KKPKKPKK...', '...KK.KK.KK...'];
+  const col = { K: '#262626', P: '#f6a6b8', Y: '#ffd84a', N: '#d9718a' };
+  let r = '';
+  px.forEach((row, y) => [...row].forEach((c, x) => { if (col[c]) r += `<rect x="${x}" y="${y}" width="1" height="1" fill="${col[c]}"/>`; }));
+  return `<svg class="mascot" width="42" height="33" viewBox="0 0 14 11" shape-rendering="crispEdges">${r}</svg>`;
+})();
+const applyTheme = () => document.body.classList.toggle('adv', !!(C && C.theme !== 'simple')); // 沒選過就用冒險主題
+
 // ---------- 畫面 ----------
 let route = 'home', statsKey = null;
 const V = {};
 function render() {
   if (!S) { $('#view').innerHTML = onboarding(); $('#tabs').hidden = true; return; }
   $('#tabs').hidden = false;
+  applyTheme();
   route = (location.hash || '#home').slice(1) || 'home';
   const base = route.split('/')[0];
   document.querySelectorAll('.tabs [data-tab]').forEach(a => a.classList.toggle('on', a.dataset.tab === (base.startsWith('set') || base === 'jars' ? (base === 'jars' ? 'home' : 'acct') : base)));
@@ -301,7 +312,7 @@ function onboarding() {
 V.home = () => {
   const k = periodOf(TODAY), { start, end } = range(k), B = budget(k);
   const total = diff(start, end) + 1, left = diff(TODAY, end) + 1, passed = total - left;
-  let h = `<div class="muted">本期 ${mdw(start)} – ${mdw(end)}・還有 ${left} 天</div><h1>錢錢管家</h1>`;
+  let h = `<div class="muted">本期 ${mdw(start)} – ${mdw(end)}・還有 ${left} 天</div><h1>${MASCOT}錢錢管家</h1>`;
   if (B.salary == null) {
     h += `<div class="card hero"><div class="muted">這期薪水還沒輸入</div><div class="big" style="font-size:28px">輸入薪水後才算得出能花多少</div><button class="btn" style="background:#fff;color:var(--brand)" data-act="salary" data-k="${k}">輸入 ${+k.slice(5)} 月薪水</button></div>`;
   } else {
@@ -558,6 +569,7 @@ V['set-general'] = () => {
   <div class="field"><label>薪水入哪個帳戶</label>${accSelect('salary.to', C.salary.to, 'data-cfg')}</div>
   <div class="field"><label>每月幾號提醒輸入薪水</label><input type="number" inputmode="numeric" data-cfg="salary.remindDay" value="${C.salary.remindDay}"></div>
   <div class="field"><label>存錢罐的錢放在哪個帳戶</label>${accSelect('savings', C.savings, 'data-cfg')}</div>
+  <div class="field"><label>外觀主題</label><select data-cfg="theme"><option value="adv" ${C.theme !== 'simple' ? 'selected' : ''}>冒險（復古像素 RPG 風）</option><option value="simple" ${C.theme === 'simple' ? 'selected' : ''}>簡潔</option></select></div>
   <div class="field"><label>每週對帳日</label><select data-cfg="reconDay">${[...WK].map((w, i) => `<option value="${i}" ${+C.reconDay === i ? 'selected' : ''}>週${w}</option>`).join('')}</select></div>
   <div class="field"><label>從哪天開始自動記帳（之前的不會補記）</label><input type="date" data-cfg="startDate" value="${C.startDate}"></div></div>
   <h2>這期和下期的發薪日</h2><div class="card"><p class="muted">遇到特殊情況（例如颱風假、臨時調整）可以手動改</p>

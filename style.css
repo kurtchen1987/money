@@ -93,3 +93,51 @@ input[type=range]{padding:0;border:0;background:transparent;accent-color:var(--b
 .addsheet .btn{margin-top:6px;padding:11px}
 @media (max-height:700px){.addsheet .keys button{padding:6px 0;font-size:17px}.ae-amt .bigamt{font-size:28px}}
 .item>.grow,.txrow>.grow{overflow-wrap:anywhere}
+
+/* ===== 冒險主題（原創的復古掌機 RPG 風格） ===== */
+body.adv{--bg:#e8f6ff;--card:#fffdf4;--ink:#262626;--sub:#5d5a52;--line:#cfc8b4;--brand:#2f8f4e;--brand2:#dff3d6;--red:#d6453d;--red2:#fde3df;--amber:#c98a12;--amber2:#fff1cc;--blue:#3b74d1;--blue2:#e1ecff;--key:#fffdf4;--chip:#fffdf4;color-scheme:light;
+  font-family:"DotGothic16","PingFang TC","Noto Sans TC","WenQuanYi Zen Hei",monospace;
+  background:linear-gradient(#bfe6ff 0,#e8f6ff 220px,#e8f6ff 70%,#cdeec0 70%) fixed;}
+body.adv::before{content:"";position:fixed;left:0;right:0;bottom:0;height:120px;z-index:-1;
+  background:repeating-linear-gradient(90deg,#7cc96a 0 8px,#6ab85a 8px 16px) bottom/100% 22px no-repeat,linear-gradient(transparent 0,#a8de92 40%,#8fd27a 100%);}
+body.adv h1{font-size:22px;letter-spacing:1px;text-shadow:2px 2px 0 #fff}
+body.adv h2{font-size:15px}
+body.adv .card,body.adv .acc{border:3px solid #262626;border-radius:8px;box-shadow:4px 4px 0 rgba(38,38,38,.85);background:var(--card)}
+body.adv .card.tight{padding:2px 12px}
+body.adv .hero{background:#fffdf4;color:var(--ink);position:relative}
+body.adv .hero .muted{color:var(--sub)}
+body.adv .hero .big{color:#262626;text-shadow:3px 3px 0 #ffd84a}
+body.adv .hero::after{content:"▼";position:absolute;right:12px;bottom:6px;font-size:12px;animation:advblink 1s steps(2) infinite}
+@keyframes advblink{50%{opacity:0}}
+body.adv .pace{background:#3a3a3a;border:2px solid #262626;height:14px;border-radius:7px}
+body.adv .pace i{background:linear-gradient(#7ee07a,#3fb04a);border-radius:5px}
+body.adv .pace::before{content:"HP";position:absolute;left:-30px;top:-3px;font-size:12px;font-weight:700;color:#d6453d}
+body.adv .hero .pace{margin-left:30px}
+body.adv .bar{height:10px;background:#3a3a3a;border:2px solid #262626;border-radius:6px}
+body.adv .bar i{background:linear-gradient(#7ee07a,#3fb04a)}
+body.adv .bar.amber i{background:linear-gradient(#ffe07a,#e5b31c)}
+body.adv .bar.red i{background:linear-gradient(#ff8a7a,#d6453d)}
+body.adv .btn{border:3px solid #262626;border-radius:10px;box-shadow:0 4px 0 #262626;background:#e8473d;color:#fff;letter-spacing:1px}
+body.adv .btn:active,body.adv .keys button:active{transform:translateY(3px);box-shadow:0 1px 0 #262626}
+body.adv .btn.ghost{background:#fffdf4;color:#262626}
+body.adv .btn.danger{background:#fffdf4;color:var(--red)}
+body.adv .chip{border:2px solid #262626;border-radius:6px;box-shadow:2px 2px 0 #262626}
+body.adv .chip.on{background:#3b74d1;border-color:#262626;color:#fff}
+body.adv .tag{border:1.5px solid currentColor;border-radius:4px}
+body.adv .seg{background:#262626;border-radius:8px}
+body.adv .seg button{color:#fff}
+body.adv .seg .on{background:#ffd84a;color:#262626}
+body.adv .keys button{border:2px solid #262626;border-radius:8px;box-shadow:0 3px 0 #262626}
+body.adv .box{border:2px solid #262626;border-radius:4px}
+body.adv .box.on{background:#2f8f4e}
+body.adv .warn,body.adv .note,body.adv .info{border:3px solid #262626;border-radius:8px;box-shadow:3px 3px 0 #262626}
+body.adv .tabs{background:#262626;border-top:4px solid #ffd84a;color:#cfcfcf}
+body.adv .tabs .on{color:#ffd84a}
+body.adv .tabs .on::before{content:"▶";position:absolute;margin-left:-44px;margin-top:6px;font-size:11px;color:#ffd84a}
+body.adv .tabs a{position:relative}
+body.adv .tabs .plus .ic{background:#e8473d;border:3px solid #fff;box-shadow:0 0 0 3px #262626}
+body.adv .sheet{background:#e8f6ff;border-top:4px solid #262626}
+body.adv .toast{background:#fffdf4;color:#262626;border:3px solid #262626;border-radius:8px;box-shadow:3px 3px 0 #262626}
+body.adv input,body.adv select,body.adv textarea{border:2px solid #262626;border-radius:6px}
+body.adv .mascot{display:inline-block;vertical-align:middle;margin-right:6px}
+body:not(.adv) .mascot{display:none}
